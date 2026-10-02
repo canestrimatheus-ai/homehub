@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Mostra a URL pública atual do túnel rápido do Cloudflare (trycloudflare.com),
+# que atende a porta 8000 (backup do gateway principal — HomeHub via ngrok).
+# ATENÇÃO: a URL muda sempre que o container homeserver-cloudflare reinicia —
+# rode este script novamente (ou confira no HomeHub > Rede) após um reboot.
+#
+# Uso: ./cloudflare-url [container]     (padrão: homeserver-cloudflare)
+set -euo pipefail
+
+CONTAINER="${1:-homeserver-cloudflare}"
+
+url="$(docker logs "$CONTAINER" 2>&1 \
+  | grep -oE 'https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com' \
+  | grep -v '^https://api\.trycloudflare\.com$' \
+  | tail -n 1 || true)"
+
+if [ -z "$url" ]; then
+  echo "❌ Nenhuma URL trycloudflare.com encontrada nos logs de '$CONTAINER'." >&2
+  echo "   O container está rodando?  docker ps | grep cloudflare" >&2
+  exit 1
+fi
+
+echo "$url"
+
+# Abre no navegador automaticamente em ambiente gráfico
+if command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+  xdg-open "$url" >/dev/null 2>&1 || true
+fi

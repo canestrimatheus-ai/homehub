@@ -1,0 +1,44 @@
+# Environment & credentials
+.env
+.env.*
+!.env.example
+.ttyd-credentials
+*.sock
+*.htpasswd
+keys/
+.ssh/
+.docker/
+auth.json
+github_keys.json
+users.json
+.hh_sessions.json
+password_resets.json
+
+# Backups, snapshots and old files
+*.bak*
+*.bak
+backups/
+backup/
+backup-logs/
+backup-snapshots.json
+backup-status.json
+backup-restore-progress.json
+
+# Databases and data volumes
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Logs & temp
+*.log
+logs/
+__pycache__/
+*.pyc
+.cache/
+.local/
+quarantine*
+.codex*
+uploads/
+ngrok.yml*
+*.tar.gz

@@ -1,0 +1,1267 @@
+"""
+HomeHub Deploy Center — Deploy Engine v3.1
+Intelligent stack detection with auto-dependency inference for Python apps.
+"""
+import os, sys, re, json, time, uuid, zipfile, tarfile, shutil, socket, subprocess, unicodedata, threading, hashlib
+from pathlib import Path
+
+import requests
+
+# ── Archive safety limits (uploads and GitHub snapshots) ─────────────────────
+# Configuráveis via ambiente; defaults elevados para projetos reais, mas ainda
+# protegem o servidor contra zip-bombas / contexto de build exagerado.
+MAX_ARCHIVE_FILES = int(os.environ.get("HOMEHUB_MAX_ARCHIVE_FILES", "200000"))
+MAX_ARCHIVE_UNCOMP_MB = int(os.environ.get("HOMEHUB_MAX_ARCHIVE_UNCOMP_MB", "2048"))
+MAX_ARCHIVE_UNCOMP_BYTES = MAX_ARCHIVE_UNCOMP_MB * 1024 * 1024
+
+class DeployEngine:
+    STEPS = [
+        "Validando upload",
+        "Detectando tecnologia",
+        "Preparando build",
+        "Construindo imagem Docker",
+        "Iniciando container temporário",
+        "Verificando saúde do container",
+        "Publicando versão",
+        "Registrando no portal",
+        "Finalizado",
+    ]
+
+    def __init__(self, db, app_dir):
+        self.db = db
+        self.app_dir = Path(app_dir)
+        self.projects_file = self.app_dir / "projects.json"
+
+    def _log(self, job_id, msg, level="INFO"):
+        print(f"[DEPLOY/{job_id[:8]}] [{level}] {msg}", flush=True)
+        self.db.add_log(job_id, msg, level)
+
+    def _step(self, job_id, step_name, step_index):
+        self._log(job_id, f"▶ {step_name}")
+        self.db.update_job(job_id, step=step_name, step_index=step_index, status="running")
+
+    def _fail(self, job_id, error_msg):
+        self._log(job_id, f"✗ Erro: {error_msg}", "ERROR")
+        self.db.update_job(job_id, status="failed", error=error_msg)
+
+    def _progress(self, job_id, pct, label):
+        pct = max(0, min(100, int(pct)))
+        self._log(job_id, f"PROGRESS {pct}% {label}")
+
+    def _dir_bytes(self, path):
+        total = 0
+        root = Path(path)
+        if not root.exists():
+            return 0
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for name in filenames:
+                try:
+                    total += (Path(dirpath) / name).stat().st_size
+                except OSError:
+                    pass
+        return total
+
+    def _github_repo_bytes(self, clone_url, token=""):
+        m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", clone_url, re.I)
+        if not m:
+            return 0
+        owner, repo = m.group(1), m.group(2)
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "HomeHub-Deploy"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"https://api.github.com/repos/{owner}/{repo}", headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+            return int(data.get("size") or 0) * 1024
+        except Exception:
+            return 0
+
+    def _git_clone_with_progress(self, job_id, clone_url, branch, dest, token=""):
+        """Clone with live % based on bytes on disk (git's own 0% stays stuck on large blobs)."""
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GIT_FLUSH"] = "1"
+        askpass = None
+        if token:
+            askpass = dest.parent / ".github-askpass"
+            askpass.write_text(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                "  *Username*) printf '%s' 'x-access-token' ;;\n"
+                "  *) printf '%s' \"$GITHUB_DEPLOY_TOKEN\" ;;\n"
+                "esac\n"
+            )
+            askpass.chmod(0o700)
+            env["GIT_ASKPASS"] = str(askpass)
+            env["GITHUB_DEPLOY_TOKEN"] = token
+        cmd = [
+            "git", "clone", "--progress", "--depth=1",
+            "--branch", branch, clone_url, str(dest),
+        ]
+        public = re.sub(r"https://[^/@]+@", "https://", clone_url)
+        expected = self._github_repo_bytes(clone_url, token)
+        started = time.time()
+        stop = threading.Event()
+        state = {"pct": 1, "t": 0}
+        lock = threading.Lock()
+
+        def emit(pct, label):
+            now = time.time()
+            pct = max(1, min(99, int(pct)))
+            with lock:
+                if pct < state["pct"] and pct < 95:
+                    pct = state["pct"]
+                if pct == state["pct"] and now - state["t"] < 0.8:
+                    return
+                state["pct"], state["t"] = pct, now
+            self._progress(job_id, pct, label)
+
+        def watch_bytes():
+            while not stop.wait(0.6):
+                downloaded = self._dir_bytes(dest)
+                elapsed = int(time.time() - started)
+                mb = downloaded / (1024 * 1024)
+                if downloaded <= 0:
+                    emit(min(12, 2 + elapsed), f"Conectando ao GitHub… {elapsed}s")
+                    continue
+                if expected > 80_000:
+                    target = max(expected * 0.25, 1)
+                    pct = min(92, int(downloaded / target * 100))
+                    emit(pct, f"Baixando {mb:.1f} MB · {elapsed}s")
+                else:
+                    pct = min(90, 15 + int(min(mb * 8, 70)) + min(elapsed // 3, 10))
+                    emit(pct, f"Baixando {mb:.1f} MB · {elapsed}s")
+
+        emit(2, "Iniciando clone")
+        watcher = threading.Thread(target=watch_bytes, daemon=True)
+        watcher.start()
+
+        master_fd = None
+        proc = None
+        try:
+            try:
+                import pty, select as sel
+                master_fd, slave_fd = pty.openpty()
+                proc = subprocess.Popen(
+                    cmd, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                    env=env, close_fds=True,
+                )
+                os.close(slave_fd)
+                while proc.poll() is None:
+                    ready, _, _ = sel.select([master_fd], [], [], 0.5)
+                    if ready:
+                        try:
+                            os.read(master_fd, 2048)
+                        except OSError:
+                            break
+            except Exception:
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+                )
+                while proc.poll() is None:
+                    time.sleep(0.5)
+            proc.wait(timeout=5)
+        finally:
+            stop.set()
+            watcher.join(timeout=1.5)
+            if askpass:
+                try:
+                    askpass.unlink()
+                except OSError:
+                    pass
+            if master_fd is not None:
+                try:
+                    os.close(master_fd)
+                except OSError:
+                    pass
+
+        if proc is None or proc.returncode != 0:
+            code = getattr(proc, "returncode", None)
+            return False, f"git clone falhou (código {code}) em {public}"
+        self._progress(job_id, 100, "Repositório baixado")
+        return True, None
+
+    def _github_archive_with_progress(self, job_id, repo_url, branch, dest, token=""):
+        """Download only the selected branch snapshot, avoiding Git pack overhead."""
+        match = re.search(r"github\.com/([^/]+)/([^/.]+)", repo_url, re.I)
+        if not match:
+            return False, "URL do GitHub inválida"
+
+        owner, repo = match.group(1), match.group(2)
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "HomeHub-Deploy",
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        archive = dest.parent / "source.tar.gz"
+        unpack_dir = dest.parent / "unpacked"
+        url = f"https://api.github.com/repos/{owner}/{repo}/tarball/{branch}"
+        started = time.time()
+        downloaded = 0
+        expected = self._github_repo_bytes(repo_url, token)
+
+        try:
+            with requests.get(url, headers=headers, stream=True, timeout=(10, 120)) as response:
+                if response.status_code in (401, 403, 404):
+                    return False, f"GitHub recusou o download (HTTP {response.status_code})"
+                response.raise_for_status()
+                content_length = int(response.headers.get("Content-Length") or 0)
+                estimate = content_length or max(int(expected * 0.25), 1)
+                with open(archive, "wb") as output:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if not chunk:
+                            continue
+                        output.write(chunk)
+                        downloaded += len(chunk)
+                        elapsed = max(time.time() - started, 0.001)
+                        pct = min(92, max(2, int(downloaded / estimate * 100)))
+                        speed = downloaded / elapsed / (1024 * 1024)
+                        self._progress(
+                            job_id, pct,
+                            f"Baixando snapshot {downloaded / (1024 * 1024):.1f} MB · {speed:.1f} MB/s",
+                        )
+
+            unpack_dir.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(archive, "r:gz") as bundle:
+                members = bundle.getmembers()
+                total = sum(max(0, member.size) for member in members)
+                if len(members) > MAX_ARCHIVE_FILES:
+                    return False, (
+                        f"Muitos arquivos no repositório: {len(members)} "
+                        f"(limite {MAX_ARCHIVE_FILES})."
+                    )
+                for member in members:
+                    parts = Path(member.name).parts
+                    if member.name.startswith("/") or ".." in parts or member.issym() or member.islnk():
+                        return False, "Archive do GitHub contém caminho inseguro"
+                if total > MAX_ARCHIVE_UNCOMP_BYTES:
+                    return False, (
+                        f"Repositório descompactado excede {MAX_ARCHIVE_UNCOMP_MB} MB "
+                        f"({total / (1024 * 1024):.1f} MB)."
+                    )
+                bundle.extractall(unpack_dir)
+
+            roots = [item for item in unpack_dir.iterdir() if item.is_dir()]
+            source = roots[0] if len(roots) == 1 else unpack_dir
+            if dest.exists():
+                shutil.rmtree(dest)
+            if source == unpack_dir:
+                dest.mkdir(parents=True)
+                for item in list(unpack_dir.iterdir()):
+                    shutil.move(str(item), str(dest / item.name))
+            else:
+                shutil.move(str(source), str(dest))
+            self._progress(job_id, 100, "Repositório baixado")
+            return True, None
+        except (requests.RequestException, OSError, tarfile.TarError) as exc:
+            return False, f"download do snapshot falhou: {exc}"
+        finally:
+            try:
+                archive.unlink()
+            except OSError:
+                pass
+            if unpack_dir.exists():
+                shutil.rmtree(unpack_dir, ignore_errors=True)
+
+    def run_deploy_job(self, job_id, upload_path, app_name, description, icon, category,
+                       publish, featured, request_ip, custom_env_vars=None, extra_networks=None):
+        upload_path = Path(upload_path)
+        extract_dir = upload_path.parent / "extracted"
+        build_log_lines = []
+
+        try:
+            # Step 1: Validate
+            self._step(job_id, "Validando upload", 1)
+            if not upload_path.exists():
+                return self._fail(job_id, "Arquivo de upload não encontrado.")
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            ok, err = self._validate_archive(upload_path, extract_dir)
+            if not ok:
+                return self._fail(job_id, err)
+            self._log(job_id, "✓ Arquivo validado com segurança contra path-traversal.")
+
+            project_dir = self._find_project_root(extract_dir)
+            self._log(job_id, f"✓ Estrutura do projeto extraída: {project_dir.name}")
+
+            # Step 2: Detect stack
+            self._step(job_id, "Detectando tecnologia", 2)
+            stack = self.detect_stack(project_dir)
+            self._log(job_id, f"✓ Stack detectada: {stack['type']} (runtime: {stack.get('runtime','N/A')}, porta interna: {stack.get('port', 80)})")
+
+            if stack["type"] == "unknown":
+                return self._fail(job_id, "Não foi possível detectar a tecnologia do projeto.")
+
+            # Identificadores do app e URL pública de subpath (/apps/<slug>/)
+            app_id = f"app-{uuid.uuid4().hex[:8]}"
+            image_tag = f"homehub-{app_id}:v1"
+            container_name = f"hh-{app_id}"
+            portal_path = self._portal_path(app_id, app_name)
+            subpath = stack["type"] in ("nextjs", "vite")
+
+            # Step 3: Prepare build
+            self._step(job_id, "Preparando build", 3)
+
+            # Auto-generate requirements.txt for Python apps if missing
+            if stack["type"] in ("flask", "fastapi", "django", "python"):
+                req_file = project_dir / "requirements.txt"
+                if not req_file.exists():
+                    inferred_deps = self._infer_python_deps(project_dir)
+                    req_file.write_text("\n".join(inferred_deps) + "\n")
+                    self._log(job_id, f"✓ requirements.txt gerado automaticamente: {', '.join(inferred_deps)}")
+                else:
+                    self._log(job_id, "✓ requirements.txt encontrado no projeto.")
+
+            if stack["type"] not in ("custom", "compose"):
+                # Ajusta o app para viver sob /apps/<slug>/ (Next basePath / Vite base).
+                if subpath:
+                    self._apply_subpath(stack, project_dir, portal_path)
+                dockerfile_content = self.generate_dockerfile(stack, project_dir, portal_path=portal_path)
+                (project_dir / "Dockerfile").write_text(dockerfile_content)
+                self._log(job_id, f"✓ Dockerfile seguro gerado para {stack['type']}")
+            else:
+                self._log(job_id, "✓ Usando Dockerfile existente")
+
+            # Step 4: Docker build
+            self._step(job_id, "Construindo imagem Docker", 4)
+            build_ok, build_log = self._docker_build(image_tag, str(project_dir), job_id)
+            build_log_lines = build_log
+            if not build_ok:
+                return self._fail(job_id, "Build da imagem Docker falhou.")
+
+            # Step 5: Run container
+            self._step(job_id, "Iniciando container temporário", 5)
+            port = self._find_free_port()
+            if not port:
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, "Nenhuma porta disponível no range 4000-4999.")
+
+            run_ok, run_err = self._docker_run_controlled(image_tag, port, {}, container_name, stack)
+            if not run_ok:
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, f"Falha ao iniciar container: {run_err}")
+            self._log(job_id, f"✓ Container iniciado na porta {port}")
+
+            # Step 6: Health check
+            self._step(job_id, "Verificando saúde do container", 6)
+            time.sleep(5)
+            healthy = self._health_check(port, container_name, timeout=30, job_id=job_id)
+            if not healthy:
+                self._log(job_id, "✗ Health check falhou — removendo container.", "WARN")
+                subprocess.run(["docker", "rm", "-f", container_name], timeout=10, capture_output=True)
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, "Health check falhou. Versão descartada por segurança.")
+            self._log(job_id, "✓ Container respondendo com sucesso.")
+
+            # Step 7: Register version
+            self._step(job_id, "Publicando versão", 7)
+            build_log_text = "\n".join(build_log_lines)
+
+            existing = self.db.get_app(app_id)
+            if not existing:
+                self.db.create_app(app_id, app_name, description, icon, category,
+                                   stack["type"], port, container_name, publish, featured)
+            else:
+                self.db.update_app(app_id, status="running", port=port, container_name=container_name)
+
+            version_num = self.db.create_version(
+                app_id, image_tag, container_name, port, True, build_log_text
+            )
+            self.db.update_job(job_id, app_id=app_id)
+            self._log(job_id, f"✓ Versão v{version_num} publicada com sucesso.")
+
+            # Step 8: Portal registration
+            self._step(job_id, "Registrando no portal", 8)
+            if publish:
+                self._register_in_portal(app_id, app_name, description, icon, category, port, featured, subpath)
+                self._log(job_id, "✓ Aplicação cadastrada no Portal Público.")
+            else:
+                self._log(job_id, "ℹ Publicação no Portal não solicitada.")
+
+            # Step 9: Done
+            self._finish_success(job_id, app_id, app_name, version_num, port, publish)
+
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            self._log(job_id, f"Erro inesperado: {e}\n{tb}", "ERROR")
+            self._fail(job_id, str(e))
+        finally:
+            try:
+                if extract_dir.exists(): shutil.rmtree(extract_dir)
+                if upload_path.exists(): upload_path.unlink()
+            except Exception:
+                pass
+
+    def detect_stack(self, path):
+        path = Path(path)
+        files = {f.name.lower() for f in path.iterdir() if f.is_file()}
+
+        def has(*names): return any(n.lower() in files for n in names)
+        def content_of(name):
+            try: return (path / name).read_text(errors="replace").lower()
+            except Exception: return ""
+
+        # 1. Custom Dockerfile – try to read exposed port from Dockerfile
+        if has("dockerfile"):
+            dockerfile_path = path / "Dockerfile"
+            try:
+                content = dockerfile_path.read_text(errors="replace").lower()
+                # Look for EXPOSE <port> or ENV PORT=<port>
+                m = re.search(r'expose\s+(\d{1,5})', content) or \
+                    re.search(r'env\s+port\s*=\s*(\d{1,5})', content)
+                port = int(m.group(1)) if m else 3000
+            except Exception:
+                port = 3000
+            return {"type": "custom", "runtime": "custom", "port": port}
+
+        # 2. Docker Compose
+        if has("docker-compose.yml", "docker-compose.yaml"):
+            return {"type": "compose", "runtime": "compose", "port": 80}
+
+        # 3. Node.js / Frontend
+        if has("package.json"):
+            pkg = content_of("package.json")
+            if has("next.config.js", "next.config.ts", "next.config.mjs") or '"next"' in pkg:
+                return {"type": "nextjs", "runtime": "node20", "port": 3000}
+            if has("vite.config.js", "vite.config.ts", "vite.config.mjs") or '"vite"' in pkg:
+                return {"type": "vite", "runtime": "node20", "port": 80, "static": True}
+            return {"type": "nodejs", "runtime": "node20", "port": 3000}
+
+        # 4. Python Applications — scan py files for framework + port
+        py_files = list(path.glob("*.py"))
+        has_py = len(py_files) > 0 or has("requirements.txt", "pipfile", "pyproject.toml")
+
+        if has_py:
+            combined_code = ""
+            for pf in py_files[:8]:
+                try: combined_code += " " + pf.read_text(errors="replace").lower()
+                except Exception: pass
+
+            if has("requirements.txt"):
+                combined_code += " " + content_of("requirements.txt")
+
+            # Extract port (e.g. port=5000, port=8000)
+            port = 5000
+            m_port = re.search(r'port\s*[=,]\s*(\d{4,5})', combined_code)
+            if m_port:
+                port = int(m_port.group(1))
+
+            entry = self._find_entry_py(path)
+
+            if has("manage.py") or "django" in combined_code:
+                return {"type": "django", "runtime": "python312", "port": port or 8000, "entry": "manage.py"}
+            if "fastapi" in combined_code:
+                return {"type": "fastapi", "runtime": "python312", "port": port or 8000, "entry": entry}
+            if "flask" in combined_code or has("templates") or has("app.py", "run.py", "server.py"):
+                return {"type": "flask", "runtime": "python312", "port": port or 5000, "entry": entry}
+            # Generic Python
+            return {"type": "python", "runtime": "python312", "port": port or 5000, "entry": entry}
+
+        # 5. PHP / Laravel
+        if has("artisan") and has("composer.json"):
+            return {"type": "laravel", "runtime": "php83", "port": 80}
+
+        # 6. Static HTML
+        if has("index.html", "index.htm"):
+            return {"type": "static", "runtime": "nginx", "port": 80, "static": True}
+
+        return {"type": "unknown"}
+
+    def _find_entry_py(self, path):
+        for candidate in ["app.py", "main.py", "server.py", "index.py", "wsgi.py", "run.py"]:
+            if (path / candidate).exists():
+                return candidate
+        py_files = [f.name for f in path.iterdir() if f.suffix == ".py" and not f.name.startswith("_")]
+        return py_files[0] if py_files else "app.py"
+
+    def _infer_python_deps(self, project_dir):
+        deps = set()
+        for py_file in list(project_dir.rglob("*.py"))[:20]:
+            try:
+                for line in py_file.read_text(errors="replace").splitlines():
+                    line = line.strip()
+                    if line.startswith("import ") or line.startswith("from "):
+                        pkg = re.split(r'[\s,]', line.replace("from ", "").replace("import ", ""))[0]
+                        pkg = pkg.split(".")[0].strip()
+                        if pkg: deps.add(pkg.lower())
+            except Exception:
+                pass
+
+        pkg_map = {
+            "flask": "flask>=3.0.0",
+            "pandas": "pandas>=2.0.0",
+            "openpyxl": "openpyxl>=3.1.0",
+            "numpy": "numpy>=1.24.0",
+            "requests": "requests>=2.31.0",
+            "fastapi": "fastapi>=0.110.0",
+            "uvicorn": "uvicorn[standard]>=0.28.0",
+            "gunicorn": "gunicorn>=21.2.0",
+            "sqlalchemy": "sqlalchemy>=2.0.0",
+            "dotenv": "python-dotenv>=1.0.0",
+            "jwt": "pyjwt>=2.8.0",
+            "bcrypt": "bcrypt>=4.1.0",
+            "docx": "python-docx>=1.1.0",
+            "reportlab": "reportlab>=4.1.0",
+            "xlsxwriter": "xlsxwriter>=3.1.0",
+            "matplotlib": "matplotlib>=3.8.0",
+            "seaborn": "seaborn>=0.13.0",
+            "jinja2": "jinja2>=3.1.0",
+        }
+
+        stdlib = {
+            "os", "sys", "io", "time", "json", "re", "math", "random", "datetime",
+            "hashlib", "hmac", "secrets", "threading", "subprocess", "socket", "uuid",
+            "pathlib", "functools", "collections", "itertools", "typing", "shutil",
+            "sqlite3", "tempfile", "urllib", "http", "logging", "base64", "csv",
+            "zipfile", "tarfile", "gzip", "copy", "traceback", "glob", "argparse",
+            "unittest", "pickle", "database", "config", "utils", "models", "views",
+            "routes", "helpers", "constants", "settings", "forms",
+        }
+
+        result = set()
+        for d in deps:
+            if d in stdlib: continue
+            if d in pkg_map:
+                result.add(pkg_map[d])
+            elif len(d) > 2 and d.isalpha():
+                result.add(d)
+
+        # Always include essentials for Flask apps
+        result.add("flask>=3.0.0")
+        result.add("gunicorn>=21.2.0")
+        result.add("werkzeug>=3.0.0")
+
+        return sorted(list(result))
+
+    def generate_dockerfile(self, stack, project_path, portal_path=None):
+        t = stack["type"]
+        port = stack.get("port", 5000)
+        entry = stack.get("entry", "app.py")
+
+        if t == "static":
+            return """FROM nginx:alpine
+RUN rm -rf /etc/nginx/conf.d/* /docker-entrypoint.d/*
+RUN printf 'server {\\n  listen 80;\\n  location / {\\n    root /usr/share/nginx/html;\\n    index index.html;\\n    try_files $uri $uri/ /index.html;\\n  }\\n}\\n' > /etc/nginx/conf.d/default.conf
+COPY . /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+"""
+        elif t in ("flask", "fastapi", "django", "python"):
+            return f"""FROM python:3.12-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE {port}
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "{entry}"]
+"""
+        elif t == "nodejs":
+            return f"""FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+EXPOSE {port}
+CMD ["node", "index.js"]
+"""
+        elif t == "nextjs":
+            # Next.js precisa de devDependencies para o build (por isso usa
+            # `npm install` e não --production), e de libc6-compat/openssl
+            # para dependências nativas como o Prisma.
+            return f"""FROM node:20-alpine
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY package*.json ./
+RUN npm install
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+ENV NODE_ENV=production
+EXPOSE {port}
+CMD ["npm", "run", "start"]
+"""
+        elif t == "vite":
+            # SPA Vite: build em node e sirva os estáticos com nginx.
+            # Com um portal_path, o nginx serve o app sob /apps/<slug>/.
+            if portal_path:
+                nginx_conf = (
+                    "server {\\n"
+                    "  listen 80;\\n"
+                    f"  location ^~ {portal_path} {{\\n"
+                    "    alias /usr/share/nginx/html/;\\n"
+                    f"    try_files $uri $uri/ {portal_path}index.html;\\n"
+                    "  }\\n"
+                    f"  location = {portal_path.rstrip('/')} {{ absolute_redirect off; return 301 {portal_path}; }}\\n"
+                    "}\\n"
+                )
+            else:
+                nginx_conf = (
+                    "server {\\n"
+                    "  listen 80;\\n"
+                    "  location / {\\n"
+                    "    root /usr/share/nginx/html;\\n"
+                    "    index index.html;\\n"
+                    "    try_files $uri $uri/ /index.html;\\n"
+                    "  }\\n"
+                    "}\\n"
+                )
+            return f"""FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+RUN rm -rf /etc/nginx/conf.d/*
+COPY --from=build /app/dist /usr/share/nginx/html
+RUN printf '{nginx_conf}' > /etc/nginx/conf.d/default.conf
+EXPOSE {port}
+CMD ["nginx", "-g", "daemon off;"]
+"""
+        return f"""FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE {port}
+CMD ["python", "{entry}"]
+"""
+
+    def _validate_archive(self, archive_path, extract_to):
+        fname = archive_path.name.lower()
+        try:
+            if fname.endswith(".zip"):
+                with zipfile.ZipFile(archive_path) as zf:
+                    members = zf.infolist()
+                    if len(members) > MAX_ARCHIVE_FILES:
+                        return False, (
+                            f"Muitos arquivos no ZIP: {len(members)} arquivos "
+                            f"(limite {MAX_ARCHIVE_FILES}). Se o ZIP inclui 'node_modules', "
+                            "gere o arquivo sem essa pasta."
+                        )
+                    total = sum(max(0, m.file_size) for m in members)
+                    if total > MAX_ARCHIVE_UNCOMP_BYTES:
+                        return False, (
+                            f"Arquivo descompactado muito grande: {total / (1024 * 1024):.0f} MB "
+                            f"(limite {MAX_ARCHIVE_UNCOMP_MB} MB)."
+                        )
+                    for m in members:
+                        if m.filename.startswith("/") or ".." in m.filename:
+                            return False, f"Caminho inválido: {m.filename}"
+                    zf.extractall(extract_to)
+                    return True, None
+            elif fname.endswith((".tar.gz", ".tgz")):
+                with tarfile.open(archive_path, "r:gz") as tf:
+                    members = tf.getmembers()
+                    if len(members) > MAX_ARCHIVE_FILES:
+                        return False, (
+                            f"Muitos arquivos no arquivo: {len(members)} "
+                            f"(limite {MAX_ARCHIVE_FILES})."
+                        )
+                    total = sum(max(0, m.size) for m in members)
+                    if total > MAX_ARCHIVE_UNCOMP_BYTES:
+                        return False, (
+                            f"Arquivo descompactado muito grande: {total / (1024 * 1024):.0f} MB "
+                            f"(limite {MAX_ARCHIVE_UNCOMP_MB} MB)."
+                        )
+                    for m in members:
+                        if m.name.startswith("/") or ".." in m.name:
+                            return False, f"Caminho inválido: {m.name}"
+                    tf.extractall(extract_to)
+                    return True, None
+            return False, "Formato não suportado."
+        except Exception as e:
+            return False, f"Erro ao descompactar: {e}"
+
+    def _find_project_root(self, extract_dir):
+        items = [i for i in Path(extract_dir).iterdir()
+                 if not i.name.startswith("__MACOSX") and not i.name.startswith(".")]
+        if len(items) == 1 and items[0].is_dir():
+            return items[0]
+        return Path(extract_dir)
+
+    def _find_free_port(self, start=4000, end=4999):
+        """Find a port that is free on the Docker host, not just in HomeHub."""
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "--format", "{{.Ports}}"],
+                capture_output=True, text=True, timeout=15
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or "docker ps falhou")
+            used_ports = {
+                int(port) for port in re.findall(
+                    r"(?:0\.0\.0\.0|\[::\]):(\d+)->", result.stdout
+                )
+            }
+            for port in range(start, end + 1):
+                if port not in used_ports:
+                    return port
+        except Exception:
+            # The deploy will still surface a clear Docker error if the host is unavailable.
+            return None
+        return None
+
+    def _docker_build(self, image_tag, build_path, job_id):
+        log_lines = []
+        last_pct = -1
+        try:
+            self._ensure_dockerignore(build_path)
+            self._progress(job_id, 1, "Iniciando build Docker")
+            proc = subprocess.Popen(
+                ["docker", "build", "-t", image_tag, "."],
+                cwd=build_path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1
+            )
+            for line in proc.stdout:
+                line = line.rstrip()
+                log_lines.append(line)
+                self.db.add_log(job_id, line, "BUILD")
+                pct = None
+                label = "Build Docker"
+                step = re.search(r"Step\s+(\d+)/(\d+)", line, re.I)
+                stage = re.search(r"\[(\d+)/(\d+)\]", line)
+                if step:
+                    a, b = int(step.group(1)), max(1, int(step.group(2)))
+                    pct = int(a / b * 100)
+                    label = f"Build Docker {a}/{b}"
+                elif stage:
+                    a, b = int(stage.group(1)), max(1, int(stage.group(2)))
+                    pct = int(a / b * 100)
+                    label = f"Build Docker {a}/{b}"
+                if pct is not None and pct != last_pct:
+                    last_pct = pct
+                    self._progress(job_id, pct, label)
+            proc.wait(timeout=900)
+            if proc.returncode == 0:
+                self._progress(job_id, 100, "Imagem Docker pronta")
+            return proc.returncode == 0, log_lines
+        except Exception as e:
+            return False, log_lines + [str(e)]
+
+    def _ensure_dockerignore(self, build_path):
+        """Keep local dependencies and caches out of Docker's build context."""
+        ignore_file = Path(build_path) / ".dockerignore"
+        required = [
+            ".git",
+            ".gitignore",
+            "node_modules",
+            ".next/cache",
+            "__pycache__",
+            "*.py[cod]",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".venv",
+            "venv",
+            "*.log",
+            "npm-debug.log*",
+        ]
+        current = ignore_file.read_text(errors="replace") if ignore_file.exists() else ""
+        existing = {line.strip() for line in current.splitlines() if line.strip()}
+        missing = [pattern for pattern in required if pattern not in existing]
+        if missing:
+            prefix = "" if not current or current.endswith("\n") else "\n"
+            ignore_file.write_text(current + prefix + "\n".join(missing) + "\n")
+
+    def _docker_run_controlled(self, image, port, env_vars, name, stack):
+        container_port = stack.get("port", 5000)
+        env_vars = dict(env_vars or {})
+        # Apps de autenticação (ex.: NextAuth/Auth.js) exigem um secret. Sem ele
+        # o endpoint /api/auth/* responde 500 (MissingSecret). Reusamos o
+        # AUTH_SECRET/NEXTAUTH_SECRET do home server como fallback determinístico.
+        auth_secret = self._deploy_auth_secret()
+        if auth_secret:
+            env_vars.setdefault("AUTH_SECRET", auth_secret)
+            env_vars.setdefault("NEXTAUTH_SECRET", auth_secret)
+        # NextAuth/Auth.js exige NEXTAUTH_URL em produção para montar redirects
+        # e cookies corretos. Sem ele, quando o app roda atrás do proxy do HomeHub
+        # (em /apps/<slug>/), o provider resolve a URL com base em localhost/interno,
+        # o que invalida a sessão no browser e pode gerar loops/502 intermitentes.
+        if stack.get("type") in ("nextjs", "custom"):
+            tunnel = os.environ.get("NGROK_TUNNEL_URL") or self._guess_public_url()
+            if tunnel:
+                env_vars.setdefault("NEXTAUTH_URL", tunnel)
+        cmd = [
+            "docker", "run", "-d",
+            "--name", name,
+            "--restart", "unless-stopped",
+            "-p", f"{port}:{container_port}",
+            "--memory=1024m",
+            "--cpus=1.5",
+            "--pids-limit=300",
+        ]
+        for k, v in env_vars.items():
+            if re.match(r"^[A-Z_][A-Z0-9_]*$", k, re.IGNORECASE):
+                cmd += ["-e", f"{k}={v}"]
+        cmd.append(image)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                return False, r.stderr.strip()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    def _deploy_auth_secret(self):
+        """Retorna o segredo de autenticação usado pelos apps Deploy Center."""
+        # 1) Valor do próprio ambiente da HomeHub (se existir).
+        secret = os.environ.get("AUTH_SECRET") or os.environ.get("NEXTAUTH_SECRET")
+        if secret:
+            return secret
+        # 2) Fallback determinístico estável, derivado do caminho da aplicação.
+        # Permite que apps /api/auth/* tenham secret mesmo sem env fornecido.
+        path = str(getattr(self, "app_dir", "") or "/app/homehub")
+        digest = hashlib.sha256(f"homehub-deploy-secret::{path}".encode()).hexdigest()
+        return digest
+
+    def _guess_public_url(self):
+        """Descobre a URL pública do gateway (Cloudflare Tunnel primeiro;
+        ngrok apenas como fallback). Retorna '' se não encontrar."""
+        # 1) Variável de ambiente explícita (método mais confiável).
+        env_url = (os.environ.get("NGROK_TUNNEL_URL")
+                   or os.environ.get("PUBLIC_URL")
+                   or os.environ.get("CF_TUNNEL_URL")
+                   or os.environ.get("CLOUDFLARE_TUNNEL_URL"))
+        if env_url:
+            return env_url
+        # 2) API do ngrok: prefere o domínio fixo (*.ngrok-free.dev → HomeHub).
+        #    O ngrok roda em network_mode: host — dentro de um container é
+        #    preciso também tentar os gateways das bridges do Docker.
+        dynamic_url = None
+        for base in ("http://127.0.0.1:4040", "http://172.17.0.1:4040",
+                     "http://172.18.0.1:4040", "http://localhost:4040"):
+            try:
+                resp = requests.get(f"{base}/api/tunnels", timeout=2)
+                data = resp.json()
+                for t in data.get("tunnels", []):
+                    if t.get("proto") != "https":
+                        continue
+                    u = t.get("public_url", "")
+                    if ".ngrok-free.dev" in u:
+                        return u
+                    if dynamic_url is None:
+                        dynamic_url = u
+            except Exception:
+                continue
+        # 2b) Hardening 2026-09-09 (task_0003): o fallback via `docker exec
+        #     homeserver-ngrok cat /etc/ngrok.yml` foi REMOVIDO (exigia
+        #     EXEC=1 no socket-proxy). A API HTTP acima + `docker logs`
+        #     abaixo (GET, só CONTAINERS=1) + env NGROK_TUNNEL_URL/
+        #     PUBLIC_URL cobrem os casos sem EXEC.
+        # 3) Túnel rápido do Cloudflare (trycloudflare.com) — fallback sem
+        #    limite de requests, mas a URL muda a cada restart do container.
+        try:
+            r = subprocess.run(
+                ["docker", "logs", "homeserver-cloudflare"],
+                capture_output=True, text=True, timeout=5,
+            )
+            text = f"{r.stdout or ''}\n{r.stderr or ''}"
+            hits = re.findall(
+                r"https://[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.trycloudflare\.com",
+                text,
+            )
+            hits = [h for h in hits if h != "https://api.trycloudflare.com"]
+            if hits:
+                return hits[-1]
+        except Exception:
+            pass
+        # 4) Qualquer URL https dinâmica do ngrok como último recurso.
+        return dynamic_url or ""
+
+
+    def _health_check(self, port, container_name, timeout=30, job_id=None):
+        deadline = time.time() + timeout
+        started = time.time()
+        while time.time() < deadline:
+            inspect = subprocess.run(
+                ["docker", "inspect", container_name, "--format", "{{.State.Running}}"],
+                capture_output=True, text=True
+            )
+            elapsed = time.time() - started
+            if job_id:
+                self._progress(job_id, min(99, int(elapsed / timeout * 100)), "Verificando saúde do container")
+            if "true" in inspect.stdout.lower():
+                if job_id:
+                    self._progress(job_id, 100, "Container saudável")
+                return True
+            time.sleep(1)
+        return False
+
+    def _cleanup_image(self, image_tag):
+        try: subprocess.run(["docker", "rmi", "-f", image_tag], timeout=30, capture_output=True)
+        except Exception: pass
+
+    def _portal_slug(self, app_id, name):
+        normalized = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower()
+        base_slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-") or "app"
+        return f"{base_slug}-{str(app_id)[-8:]}"
+
+    def _portal_path(self, app_id, name):
+        return f"/apps/{self._portal_slug(app_id, name)}/"
+
+    def _finish_success(self, job_id, app_id, app_name, version_num, port, publish):
+        portal_path = self._portal_path(app_id, app_name)
+        # URL pública única e estável: o proxy do portal em /apps/<slug>/
+        # (nginx na borda e HomeHub repassam ao container). Funciona pela
+        # internet (ngrok) e na LAN, sem depender de IP/porta do host.
+        open_url = portal_path if publish else ""
+        self._step(job_id, "Finalizado", 9)
+        self.db.update_job(job_id, status="success", step=f"Online — v{version_num}")
+        if open_url:
+            self._log(job_id, f"🔗 Concluído {open_url}")
+        else:
+            self._log(job_id, f"🔗 Concluído (interno, porta {port})")
+        self._log(job_id, f"🟢 Deploy concluído! {app_name} v{version_num} (porta {port})")
+
+    def _apply_subpath(self, stack, project_dir, portal_path):
+        """Ajusta o projeto front-end (Next/Vite) para viver sob um subpath.
+
+        Sem isso, apps Next.js emitem redirects/assets absolutos (/, /_next/...)
+        que escapam do prefixo /apps/<slug>/ do Portal e retornam 404."""
+        t = stack["type"]
+        if t == "nextjs":
+            self._configure_nextjs_subpath(project_dir, portal_path)
+        elif t == "vite":
+            self._configure_vite_subpath(project_dir, portal_path)
+
+    def _configure_nextjs_subpath(self, project_dir, portal_path):
+        base = portal_path.rstrip("/")
+        candidates = ["next.config.mjs", "next.config.js", "next.config.ts"]
+        existing = next((c for c in candidates if (project_dir / c).exists()), None)
+        is_ts = existing == "next.config.ts"
+        if existing:
+            try:
+                if "basePath" in (project_dir / existing).read_text(errors="replace"):
+                    return
+            except Exception:
+                pass
+        target = existing or "next.config.js"
+        if is_ts:
+            content = (
+                'import type { NextConfig } from "next";\n'
+                "const nextConfig: NextConfig = {\n"
+                f'  basePath: "{base}",\n'
+                f'  assetPrefix: "{base}",\n'
+                "};\n"
+                "export default nextConfig;\n"
+            )
+        else:
+            content = (
+                "/** @type {import('next').NextConfig} */\n"
+                "const nextConfig = {\n"
+                f'  basePath: "{base}",\n'
+                f'  assetPrefix: "{base}",\n'
+                "};\n"
+                "module.exports = nextConfig;\n"
+            )
+        (project_dir / target).write_text(content)
+        # Remove configs restantes para não haver conflito entre .js/.mjs/.ts.
+        for c in candidates:
+            if c != target:
+                other = project_dir / c
+                if other.exists():
+                    try:
+                        other.unlink()
+                    except Exception:
+                        pass
+        print(f"[DEPLOY] basePath configurado: {base}", flush=True)
+
+    def _configure_vite_subpath(self, project_dir, portal_path):
+        base = portal_path
+        pkg_file = project_dir / "package.json"
+        try:
+            pkg = json.loads(pkg_file.read_text())
+        except Exception:
+            pkg = {}
+        scripts = dict(pkg.get("scripts") or {})
+        build = scripts.get("build", "")
+        if build and "--base" not in build and "base:" not in build:
+            scripts["build"] = f"{build} --base={base}"
+            pkg["scripts"] = scripts
+            pkg_file.write_text(json.dumps(pkg, indent=2, ensure_ascii=False))
+        print(f"[DEPLOY] base configurado: {base}", flush=True)
+
+    def _register_in_portal(self, app_id, name, description, icon, category, port, featured, subpath=False):
+        try:
+            if self.projects_file.exists():
+                with open(self.projects_file) as f: projects = json.load(f)
+            else:
+                projects = []
+
+            slug = self._portal_slug(app_id, name)
+            entry = {
+                "id": app_id, "slug": slug, "name": name, "description": description,
+                "icon": icon, "category": category, "badge": category,
+                "url": f"/apps/{slug}/",
+                "status": "online", "featured": featured, "published": True,
+                "subpath": bool(subpath),
+                "tags": ["Deploy Center", category]
+            }
+            found = False
+            for i, p in enumerate(projects):
+                if p.get("id") == app_id:
+                    projects[i] = entry
+                    found = True
+                    break
+            if not found:
+                projects.append(entry)
+
+            with open(self.projects_file, "w") as f:
+                json.dump(projects, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            raise Exception(f"Erro ao registrar no portal: {e}")
+
+
+    def run_github_deploy_job(self, job_id, clone_url, branch, app_name, description,
+                               icon, category, publish, featured, request_ip, token=""):
+        """Download a GitHub branch and run the standard deploy pipeline on it."""
+        import tempfile
+        tmp_dir = None
+        try:
+            self._step(job_id, "Baixando repositório GitHub", 0)
+            tmp_dir = tempfile.mkdtemp(prefix="hh_git_")
+            clone_dir = Path(tmp_dir) / "repo"
+
+            public_url = re.sub(r"https://[^/@]+@", "https://", clone_url)
+            self._log(job_id, f"▶ Baixando {public_url} (branch: {branch})...")
+            ok, err = self._github_archive_with_progress(job_id, public_url, branch, clone_dir, token)
+            if not ok:
+                self._log(job_id, f"Snapshot indisponível ({err}); tentando clone Git raso.", "WARN")
+                ok, err = self._git_clone_with_progress(job_id, public_url, branch, clone_dir, token)
+            if not ok:
+                return self._fail(job_id, f"Falha ao baixar repositório: {err}")
+
+            self._log(job_id, f"✓ Repositório baixado com sucesso ({branch}).")
+
+            # Remove .git dir so it doesn't go into the Docker image
+            git_dir = clone_dir / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
+
+            # Count files
+            file_count = sum(1 for _ in clone_dir.rglob("*") if _.is_file())
+            self._log(job_id, f"✓ {file_count} arquivos encontrados.")
+
+            # Now run the standard pipeline from step 2 onwards
+            # Step 2: Detect stack
+            self._step(job_id, "Detectando tecnologia", 2)
+            stack = self.detect_stack(clone_dir)
+            self._log(job_id, f"✓ Stack detectada: {stack['type']} (runtime: {stack.get('runtime','N/A')}, porta: {stack.get('port', 80)})")
+
+            if stack["type"] == "unknown":
+                return self._fail(job_id, "Não foi possível detectar a tecnologia do projeto.")
+
+            # Step 3: Prepare build
+            self._step(job_id, "Preparando build", 3)
+            if stack["type"] in ("flask", "fastapi", "django", "python"):
+                req_file = clone_dir / "requirements.txt"
+                if not req_file.exists():
+                    inferred = self._infer_python_deps(clone_dir)
+                    req_file.write_text("\n".join(inferred) + "\n")
+                    self._log(job_id, f"✓ requirements.txt gerado: {', '.join(inferred)}")
+                else:
+                    self._log(job_id, "✓ requirements.txt encontrado no repositório.")
+
+            app_id = f"app-{uuid.uuid4().hex[:8]}"
+            image_tag = f"homehub-{app_id}:v1"
+            container_name = f"hh-{app_id}"
+            portal_path = self._portal_path(app_id, app_name)
+            subpath = stack["type"] in ("nextjs", "vite")
+
+            if stack["type"] not in ("custom", "compose"):
+                # Ajusta o app para viver sob /apps/<slug>/ (Next basePath / Vite base).
+                if subpath:
+                    self._apply_subpath(stack, clone_dir, portal_path)
+                dockerfile = self.generate_dockerfile(stack, clone_dir, portal_path=portal_path)
+                (clone_dir / "Dockerfile").write_text(dockerfile)
+                self._log(job_id, f"✓ Dockerfile gerado para {stack['type']}")
+            else:
+                self._log(job_id, "✓ Usando Dockerfile existente do repositório.")
+
+            # Step 4: Build
+            self._step(job_id, "Construindo imagem Docker", 4)
+            build_ok, build_log = self._docker_build(image_tag, str(clone_dir), job_id)
+            if not build_ok:
+                return self._fail(job_id, "Build da imagem Docker falhou.")
+
+            # Step 5: Run
+            self._step(job_id, "Iniciando container temporário", 5)
+            port = self._find_free_port()
+            if not port:
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, "Nenhuma porta disponível.")
+
+            run_ok, run_err = self._docker_run_controlled(image_tag, port, {}, container_name, stack)
+            if not run_ok:
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, f"Falha ao iniciar container: {run_err}")
+            self._log(job_id, f"✓ Container iniciado na porta {port}")
+
+            # Step 6: Health check
+            self._step(job_id, "Verificando saúde do container", 6)
+            time.sleep(5)
+            healthy = self._health_check(port, container_name, timeout=30, job_id=job_id)
+            if not healthy:
+                subprocess.run(["docker", "rm", "-f", container_name], timeout=10, capture_output=True)
+                self._cleanup_image(image_tag)
+                return self._fail(job_id, "Health check falhou. Versão descartada por segurança.")
+            self._log(job_id, "✓ Container respondendo com sucesso.")
+
+            # Step 7: Register
+            self._step(job_id, "Publicando versão", 7)
+            build_log_text = "\n".join(build_log)
+            existing = self.db.get_app(app_id)
+            if not existing:
+                self.db.create_app(app_id, app_name, description, icon, category,
+                                   stack["type"], port, container_name, publish, featured)
+            else:
+                self.db.update_app(app_id, status="running", port=port, container_name=container_name)
+
+            version_num = self.db.create_version(app_id, image_tag, container_name, port, True, build_log_text)
+            self.db.update_job(job_id, app_id=app_id)
+            self._log(job_id, f"✓ Versão v{version_num} publicada.")
+
+            # Step 8: Portal
+            self._step(job_id, "Registrando no portal", 8)
+            if publish:
+                self._register_in_portal(app_id, app_name, description, icon, category, port, featured, subpath)
+                self._log(job_id, "✓ Aplicação cadastrada no Portal Público.")
+
+            # Step 9: Done
+            self._finish_success(job_id, app_id, app_name, version_num, port, publish)
+
+        except Exception as e:
+            import traceback
+            self._log(job_id, f"Erro: {e}\n{traceback.format_exc()}", "ERROR")
+            self._fail(job_id, str(e))
+        finally:
+            if tmp_dir:
+                try: shutil.rmtree(tmp_dir)
+                except Exception: pass
+
+
+    def rollback(self, app_id, version_num):
+        ver = self.db.get_version(app_id, version_num)
+        app_data = self.db.get_app(app_id)
+        if not ver or not app_data:
+            raise Exception("Versão ou App não encontrado.")
+
+        current_container = app_data.get("container_name")
+        if current_container:
+            subprocess.run(["docker", "stop", current_container], timeout=30, capture_output=True)
+            subprocess.run(["docker", "rm", current_container], timeout=30, capture_output=True)
+
+        port = ver["port"] or self._find_free_port()
+        stack = {"port": port}
+        ok, err = self._docker_run_controlled(ver["image_tag"], port, {}, ver["container_name"], stack)
+        if not ok:
+            raise Exception(f"Falha ao iniciar container v{version_num}: {err}")
+
+        self.db.set_current_version(app_id, version_num)
+        self.db.update_app(app_id, status="running", container_name=ver["container_name"], port=port)
+
+    # Infrastructure that must never be removed by catalog/deploy deletes.
+    PROTECTED_CONTAINERS = frozenset({
+        "homehub-dashboard",
+        "homeserver-mysql",
+        "homeserver-postgres",
+        "homeserver-redis",
+        "homeserver-ngrok",
+        "homeserver-cloudflare",
+        "homeserver-portainer",
+        "homeserver-adminer",
+    })
+
+    COMPOSE_CONTAINERS_BY_KEY = {
+        "ridecheck-web": ["ridecheck-web", "ridecheck-mobile"],
+        "ridecheck": ["ridecheck-web", "ridecheck-mobile"],
+        "decam": ["homeserver-decam"],
+        "fcc-server": ["fcc-server"],
+        "fccserver": ["fcc-server"],
+        "gobrax": ["gobrax"],
+    }
+
+    def _norm(self, value):
+        text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode()
+        return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+    def _docker_rm(self, name):
+        if not name or name in self.PROTECTED_CONTAINERS:
+            return False
+        result = subprocess.run(
+            ["docker", "rm", "-f", name], timeout=30, capture_output=True, text=True
+        )
+        return result.returncode == 0
+
+    def _compose_containers_for_project(self, project):
+        blob = self._norm(project.get("id", "")) + " " + self._norm(project.get("name", ""))
+        names = []
+        for key, containers in self.COMPOSE_CONTAINERS_BY_KEY.items():
+            if self._norm(key) and self._norm(key) in blob:
+                names.extend(containers)
+        return list(dict.fromkeys(names))
+
+    def destroy_app(self, app_id):
+        """Stop/remove Docker resources and erase the Deploy Center record."""
+        app_data = self.db.get_app(app_id)
+        versions = self.db.get_versions(app_id) if app_data else []
+        containers, images = set(), set()
+
+        if app_data and app_data.get("container_name"):
+            containers.add(app_data["container_name"])
+        for ver in versions:
+            if ver.get("container_name"):
+                containers.add(ver["container_name"])
+            if ver.get("image_tag"):
+                images.add(ver["image_tag"])
+        images.add(f"homehub-{app_id}:v1")
+
+        removed_containers = []
+        for name in containers:
+            if self._docker_rm(name):
+                removed_containers.append(name)
+
+        removed_images = []
+        for tag in images:
+            if not tag:
+                continue
+            result = subprocess.run(
+                ["docker", "rmi", "-f", tag], timeout=30, capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                removed_images.append(tag)
+
+        self.db.delete_app(app_id)
+        return {
+            "app_id": app_id,
+            "name": (app_data or {}).get("name"),
+            "containers": removed_containers,
+            "images": removed_images,
+        }
+
+    def destroy_portal_project(self, project):
+        """Tear down Deploy Center apps and related Docker containers for a catalog entry."""
+        removed_apps = []
+        db = self.db
+        for app in db.find_apps_for_portal_project(project):
+            removed_apps.append(self.destroy_app(app["id"]))
+
+        extra_containers = []
+        candidates = self._compose_containers_for_project(project)
+        pid = (project.get("id") or "").strip()
+        if pid:
+            candidates.extend([pid, f"hh-{pid}", f"hh-app-{pid}", f"hh-app-{pid[-8:]}", f"homeserver-{pid}"])
+        for name in dict.fromkeys(candidates):
+            if self._docker_rm(name):
+                extra_containers.append(name)
+
+        return {"deploy_apps": removed_apps, "compose_containers": extra_containers}

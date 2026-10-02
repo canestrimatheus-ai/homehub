@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HomeHub Admin Console — Enterprise Server & Deploy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=20260919_clean_v1" />
+  <style>
+    /* ===== Gerenciador de Arquivos ===== */
+    .fm-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .fm-btn {
+      background: var(--bg-subtle, #1e293b);
+      border: 1px solid var(--border-base, #334155);
+      color: var(--text-1, #e2e8f0) !important;
+    }
+    .fm-btn:hover { background: var(--bg-card-hover, #2b3a52); border-color: rgba(255,255,255,0.18); }
+    .fm-btn-del { background: var(--danger-bg, rgba(239,68,68,0.15)) !important; border-color: rgba(239,68,68,0.35) !important; color: #f87171 !important; }
+    .fm-btn-del:hover { background: #9c2b2b !important; color: #fff !important; }
+    .fm-check { width: 15px; height: 15px; cursor: pointer; accent-color: var(--brand, #0284c7); }
+    tr.fm-row-selected { background: rgba(2,132,199,0.12) !important; }
+    .fm-path-input {
+      flex: 1; min-width: 200px; padding: 8px 10px; font-size: 13px;
+      background-color: var(--card-alt, #111827); border: 1px solid var(--border, #2b3650);
+      color: var(--text, #e2e8f0); border-radius: 6px; font-family: var(--font-mono, monospace);
+    }
+    .fm-path-input:focus { outline: none; border-color: var(--accent, #4fc3f7); }
+    .fm-info { font-size: 12px; color: var(--muted, #94a3b8); margin-bottom: 10px; word-break: break-all; }
+    table.fm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fm-table th, .fm-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border, #2b3650); }
+    .fm-table th { color: var(--muted, #94a3b8); background: var(--card-alt, #111827); position: sticky; top: 0; }
+    .fm-table tr:hover { background: var(--card-alt, #111827); }
+    .fm-name { cursor: pointer; color: var(--text, #e2e8f0); }
+    .fm-dir .fm-name { color: var(--accent, #4fc3f7); }
+    .fm-size, .fm-date { color: var(--muted, #94a3b8); }
+    .fm-actions button { margin-left: 4px; padding: 4px 9px; font-size: 12px; border: none; border-radius: 5px; cursor: pointer; color: #fff; }
+    .fm-actions .dl { background: #1b6e2f; }
+    .fm-actions .del { background: #9c2b2b; }
+    .fm-actions button:hover { opacity: 0.85; }
+    .fm-empty { padding: 28px; text-align: center; color: var(--muted, #94a3b8); }
+  </style>
+
+    <style>
+      .clean-ram-btn {
+        background: rgba(168, 85, 247, 0.12);
+        color: #c084fc;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s ease;
+        line-height: 1.4;
+      }
+      .clean-ram-btn:hover {
+        background: rgba(168, 85, 247, 0.25);
+        color: #f3e8ff;
+        border-color: rgba(168, 85, 247, 0.6);
+        transform: translateY(-1px);
+      }
+      .clean-ram-btn:active {
+        transform: translateY(0);
+      }
+      .clean-ram-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+    </style>
+    
+  <!-- Estilos Limpos para o Backup (Linear / Vercel Grade) -->
+  <style id="bkb-clean-styles">
+    .bkb-card-clean {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(13, 20, 36, 0.95) 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 16px !important;
+      padding: 24px !important;
+      box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5) !important;
+      margin-bottom: 24px !important;
+    }
+    .bkb-header-clean {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .bkb-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .bkb-icon-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+    .bkb-title-clean {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin: 0;
+    }
+    .bkb-sub-clean {
+      font-size: 0.8125rem;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+    .bkb-progress-box-clean {
+      background: rgba(11, 18, 32, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 20px 22px;
+      margin-bottom: 20px;
+    }
+    .bkb-bar-header-clean {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .bkb-step-label-clean {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bkb-pct-clean {
+      font-size: 1.75rem;
+      font-weight: 800;
+      font-family: var(--font-mono, monospace);
+      color: #38bdf8;
+      letter-spacing: -0.5px;
+    }
+    .bkb-track-clean {
+      width: 100%;
+      height: 14px;
+      background: rgba(30, 41, 59, 0.85);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+    }
+    .bkb-fill-clean {
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #34d399 100%);
+      border-radius: 999px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+    }
+    .bkb-stats-row-clean {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .bkb-stat-chip {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .bkb-stat-chip strong {
+      color: #f1f5f9;
+      font-family: var(--font-mono, monospace);
+    }
+    .bkb-actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .bkb-btn-run {
+      background: #0284c7 !important;
+      color: #fff !important;
+      font-weight: 600 !important;
+      padding: 10px 20px !important;
+      border-radius: 8px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      border: none !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+    }
+    .bkb-btn-run:hover {
+      background: #0369a1 !important;
+      transform: translateY(-1px) !important;
+    }
+    .bkb-btn-run:disabled {
+      opacity: 0.6 !important;
+      cursor: not-allowed !important;
+      transform: none !important;
+    }
+    .bkb-btn-log {
+      background: transparent !important;
+      color: #94a3b8 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      padding: 8px 14px !important;
+      border-radius: 8px !important;
+      font-size: 0.8125rem !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      transition: all 0.2s ease !important;
+    }
+    .bkb-btn-log:hover {
+      background: rgba(255, 255, 255, 0.05) !important;
+      color: #f1f5f9 !important;
+    }
+    .bkb-term-box {
+      margin-top: 18px;
+      background: #090d16;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 10px;
+      padding: 14px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-family: var(--font-mono, monospace);
+      font-size: 0.75rem;
+      color: #38bdf8;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body class="admin-body">
+
+  <!-- =========================================================================
+       LOGIN VIEW
+       ========================================================================= -->
+  <div id="admin-login-view" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo-mark">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+          <line x1="6" y1="6" x2="6.01" y2="6"></line>
+          <line x1="6" y1="18" x2="6.01" y2="18"></line>
+        </svg>
+      </div>
+      <div class="auth-header">
+        <h1>HomeHub Admin</h1>
+        <p>Acesso restrito à gestão de infraestrutura e deploy</p>
+      </div>
+
+      <div id="login-error-msg" class="error-banner hidden"></div>
+
+      <form id="admin-login-form" class="auth-form" onsubmit="event.preventDefault(); submitLogin();">
+        <div class="form-field">
+          <label for="admin-user-input">E-mail Corporativo</label>
+          <input type="text" id="admin-user-input" autocomplete="username" placeholder="seu.email@expressonepomuceno.com.br" required />
+        </div>
+        <div class="form-field">
+          <label for="admin-pass-input">Senha</label>
+          <input type="password" id="admin-pass-input" autocomplete="current-password" placeholder="••••••••" required />
+        </div>
+        <div id="totp-login-row" class="form-field hidden">
+          <label for="admin-totp-input">Código 2FA</label>
+          <input type="text" id="admin-totp-input" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6" />
+        </div>
+        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-full">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+          </svg>
+          Acessar Painel
+        </button>
+      </form>
+
+      <div class="auth-meta">
+        <span>Sessão criptografada via PBKDF2</span>
+        <a href="/" class="link-subtle">← Voltar ao Portal Público</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       ADMIN APP (DASHBOARD SPA)
+       ========================================================================= -->
+  <div id="admin-dashboard-view" class="admin-app hidden">
+
+    <!-- ── SIDEBAR ── -->
+    <aside id="admin-sidebar" class="admin-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+        </div>
+        <div>
+          <div class="sidebar-brand-name">HomeHub</div>
+          <div class="sidebar-brand-sub">Enterprise Platform</div>
+        </div>
+      </div>
+
+      <!-- Server Status Pill -->
+      <div id="sidebar-status-pill" class="sidebar-status-pill pill-online">
+        <span class="sidebar-status-dot"></span>
+        <span id="sidebar-status-text">Servidor Online</span>
+      </div>
+
+      <!-- Nav Items -->
+      <nav class="sidebar-nav">
+        <button class="sidebar-nav-item active" data-page="overview" onclick="navigateTo('overview')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Visão Geral</span>
+        </button>
+
+        <button class="sidebar-nav-item" data-page="applications" onclick="navigateTo('applications')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>Portal Público</span>
+          <span id="nav-badge-apps" class="nav-badge hidden">0</span>
+        </button>
+
+        <button class="sidebar-nav-item" data-page="network" onclick="navigateTo('network')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <span>Rede & Conectividade</span>
+        </button>
+
+        <!-- BACKUP & RECOVERY (NEW) -->
+        <button class="sidebar-nav-item" data-page="backup" onclick="navigateTo('backup')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+          </svg>
+          <span>💾 Backup Google Drive</span>
+        </button>
+
+        <!-- AUDIT LOGS (NEW) -->
+        <button class="sidebar-nav-item" data-page="audit" onclick="navigateTo('audit')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Auditoria</span>
+        </button>
+
+                <button class="sidebar-nav-item" data-page="users" onclick="navigateTo('users')">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span>Administradores</span>
+          
+        </button>
+
+        </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-avatar">A</div>
+          <div class="sidebar-user-meta">
+            <span class="sidebar-user-name">Administrador</span>
+            <span class="sidebar-user-role">Sessão Ativa</span>
+          </div>
+        </div>
+        <div class="sidebar-footer-actions">
+          <a href="/" target="_blank" class="sidebar-action-btn" title="Ver Portal Público">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <button onclick="performLogout()" class="sidebar-action-btn" title="Encerrar Sessão">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── CONTENT AREA ── -->
+    <main class="admin-content-area">
+      <!-- Top Header -->
+      <header class="content-header">
+        <div class="content-header-left">
+          <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div>
+            <h1 id="content-page-title" class="content-page-title">Visão Geral</h1>
+            <p id="content-page-subtitle" class="content-page-subtitle">Status do servidor e telemetria em tempo real</p>
+          </div>
+        </div>
+        <div class="content-header-right">
+          <div class="notif-wrapper">
+            <button class="header-notif-btn" id="header-notif-btn" onclick="HHNotify.toggle()" title="Notificações" aria-label="Notificações">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-center hidden" id="notif-center">
+              <div class="notif-center-header">
+                <h3>Notificações</h3>
+                <div class="notif-center-actions">
+                  <button class="notif-action-btn" onclick="HHNotify.markAllRead()" title="Marcar todas como lidas">✓ Lidas</button>
+                  <button class="notif-action-btn" onclick="HHNotify.clearAll()" title="Limpar tudo">🗑 Limpar</button>
+                </div>
+              </div>
+              <div class="notif-list" id="notif-list">
+                <div class="notif-empty">Nenhuma notificação ainda</div>
+              </div>
+            </div>
+          </div>
+          <div class="header-uptime-chip">
+            <span class="text-muted">Uptime:</span>
+            <span id="header-uptime-chip">--</span>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="openSshModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            SSH Info
+          </button>
+        </div>
+      </header>
+
+      <!-- Pages Container -->
+      <div class="content-pages">
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             1. VISÃO GERAL
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-overview" class="page-section active">
+          <!-- KPIs -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-header"><span class="kpi-label">Uso de CPU</span><span class="kpi-icon kpi-icon-blue">⚡</span></div>
+              <div class="kpi-value" id="kpi-cpu-val">0%</div>
+              <div class="kpi-bar"><div id="kpi-cpu-bar" class="kpi-bar-fill kpi-bar-blue" style="width:0%"></div></div>
+              <div class="kpi-meta"><span style="display:inline-flex;align-items:center;gap:6px;"><span id="kpi-cpu-temp" class="gauge-badge">--</span> <span id="kpi-cpu-meta">Processamento atual: 0%</span></span></div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-header"><span class="kpi-label">Memória RAM</span><span class="kpi-icon kpi-icon-purple">🧠</span></div>
+              <div class="kpi-value" id="kpi-ram-val">0%</div>
+              <div class="kpi-bar"><div id="kpi-ram-bar" class="kpi-bar-fill kpi-bar-purple" style="width:0%"></div></div>
+              <div class="kpi-meta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span id="kpi-ram-meta">0 GB usados de 0 GB</span>
+                <button type="button" id="btn-clean-ram" class="clean-ram-btn" title="Limpar cache de memória RAM" onclick="cleanServerRam(this)">
+                  <span class="clean-icon">🧹</span> Limpar
+                </button>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-header"><span class="kpi-label">Armazenamento SSD</span><span class="kpi-icon kpi-icon-emerald">💾</span></div>
+              <div class="kpi-value" id="kpi-disk-val">0%</div>
+              <div class="kpi-bar"><div id="kpi-disk-bar" class="kpi-bar-fill kpi-bar-emerald" style="width:0%"></div></div>
+              <div class="kpi-meta" id="kpi-disk-meta">0 GB usados de 0 GB</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-header"><span class="kpi-label">Tráfego de Rede</span><span class="kpi-icon kpi-icon-amber">🌐</span></div>
+              <div class="kpi-value" id="kpi-net-val">0 B/s</div>
+              <div class="kpi-net-row">
+                <span class="kpi-net-chip kpi-net-rx">↓ <span id="kpi-rx">0 B/s</span></span>
+                <span class="kpi-net-chip kpi-net-tx">↑ <span id="kpi-tx">0 B/s</span></span>
+              </div>
+              <div class="kpi-meta" id="kpi-net-meta">Total RX: 0 B · TX: 0 B</div>
+            </div>
+          </div>
+
+          <!-- Quick counts -->
+          <div class="overview-status-row">
+            <div class="status-info-card"><div class="sic-icon sic-blue">📦</div><div><div class="sic-value" id="ov-apps-count">0</div><div class="sic-label">Aplicações no Portal</div></div></div>
+            <div class="status-info-card"><div class="sic-icon sic-purple">🐳</div><div><div class="sic-value" id="ov-containers-count">0</div><div class="sic-label">Containers Docker</div></div></div>
+            <div class="status-info-card"><div class="sic-icon sic-green">⚙️</div><div><div class="sic-value" id="ov-services-count">0</div><div class="sic-label">Serviços Ativos</div></div></div>
+            <div class="status-info-card"><div class="sic-icon sic-amber">⏱️</div><div><div class="sic-value" id="ov-uptime-val">--</div><div class="sic-label">Tempo de Atividade</div></div></div>
+          </div>
+
+
+          <!-- ══ CLUSTER DE ALTA DISPONIBILIDADE ══ -->
+          <div class="cluster-ha-section">
+            <div class="cluster-ha-header">
+              <div class="cluster-ha-title-group">
+                <span class="cluster-ha-icon">🔄</span>
+                <div>
+                  <h2 class="cluster-ha-title">Alta Disponibilidade</h2>
+                  <p class="cluster-ha-desc">Dell Vostro (Primário) + AWS EC2 (Standby) · Atualiza a cada 10s</p>
+                </div>
+              </div>
+              <div class="cluster-ha-actions">
+                <div id="cluster-refresh-dot" class="cluster-refresh-dot"></div>
+                <div class="cluster-badge cluster-badge-active" style="font-size: 0.75rem; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                  🟢 Duplicidade Ativa 24h
+                </div>
+              </div>
+            </div>
+
+            <!-- Dual Server Cards -->
+            <div class="cluster-cards-grid">
+              <!-- VOSTRO CARD -->
+              <div class="cluster-server-card" id="cluster-card-vostro">
+                <div class="cluster-server-header">
+                  <div class="cluster-server-identity">
+                    <span class="cluster-server-emoji">🖥️</span>
+                    <div>
+                      <div class="cluster-server-name">Dell Vostro</div>
+                      <div class="cluster-server-subtitle">Servidor Primário · Local</div>
+                    </div>
+                  </div>
+                  <div id="cluster-badge-vostro" class="cluster-badge cluster-badge-active">🟢 Tráfego Ativo</div>
+                </div>
+                <div class="cluster-metrics">
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">CPU</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="vostro-cpu-bar" class="cluster-metric-fill cluster-fill-blue" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="vostro-cpu-val">--</span>
+                  </div>
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">RAM</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="vostro-ram-bar" class="cluster-metric-fill cluster-fill-purple" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="vostro-ram-val">--</span>
+                  </div>
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">Disco</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="vostro-disk-bar" class="cluster-metric-fill cluster-fill-emerald" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="vostro-disk-val">--</span>
+                  </div>
+                </div>
+                <div class="cluster-server-footer">
+                  <div class="cluster-info-chip"><span>⏱️</span><span id="vostro-uptime">--</span></div>
+                  <div class="cluster-info-chip"><span>🔄</span><span id="vostro-sync">Sync: --</span></div>
+                  <div class="cluster-info-chip cluster-status-chip" id="vostro-status-chip"><span id="vostro-status-text">Verificando...</span></div>
+                </div>
+              </div>
+
+              <!-- AWS CARD -->
+              <div class="cluster-server-card" id="cluster-card-aws">
+                <div class="cluster-server-header">
+                  <div class="cluster-server-identity">
+                    <span class="cluster-server-emoji">☁️</span>
+                    <div>
+                      <div class="cluster-server-name">AWS EC2</div>
+                      <div class="cluster-server-subtitle">Servidor Standby · Cloud</div>
+                    </div>
+                  </div>
+                  <div id="cluster-badge-aws" class="cluster-badge cluster-badge-standby">🟡 Standby Pronto</div>
+                </div>
+                <div class="cluster-metrics">
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">CPU</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="aws-cpu-bar" class="cluster-metric-fill cluster-fill-blue" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="aws-cpu-val">--</span>
+                  </div>
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">RAM</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="aws-ram-bar" class="cluster-metric-fill cluster-fill-purple" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="aws-ram-val">--</span>
+                  </div>
+                  <div class="cluster-metric-row">
+                    <span class="cluster-metric-label">Disco</span>
+                    <div class="cluster-metric-bar-wrap">
+                      <div class="cluster-metric-bar"><div id="aws-disk-bar" class="cluster-metric-fill cluster-fill-emerald" style="width:0%"></div></div>
+                    </div>
+                    <span class="cluster-metric-val" id="aws-disk-val">--</span>
+                  </div>
+                </div>
+                <div class="cluster-server-footer">
+                  <div class="cluster-info-chip"><span>⏱️</span><span id="aws-uptime">--</span></div>
+                  <div class="cluster-info-chip"><span>🐶</span><span id="aws-watchdog">Watchdog: --</span></div>
+                  <div class="cluster-info-chip cluster-status-chip" id="aws-status-chip"><span id="aws-status-text">Verificando...</span></div>
+                </div>
+              </div>
+            </div><!-- /cluster-cards-grid -->
+          </div><!-- /cluster-ha-section -->
+
+                    
+
+          <!-- Containers running -->
+          <div class="section-card">
+            <div class="section-card-header">
+              <div><h2 class="section-card-title">Containers Docker em Execução</h2><p class="section-card-desc">Processos isolados gerenciados pelo Docker daemon</p></div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Nome</th><th>Imagem</th><th>Status</th><th>Portas</th></tr></thead>
+                <tbody id="ov-containers-list"><tr><td colspan="4" class="td-loading">Carregando containers...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        
+
+        <!-- Deploy Center desativado -->
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             4. PORTAL PÚBLICO (CATÁLOGO)
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-applications" class="page-section">
+          <div class="section-card">
+            <div class="section-card-header">
+              <div>
+                <h2 class="section-card-title">Catálogo do Portal Público</h2>
+                <p class="section-card-desc">Gerencie quais aplicações aparecem para os funcionários na página inicial</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openProjectModal()">+ Nova Aplicação</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Ícone</th><th>Nome</th><th>Categoria</th><th>URL</th><th>Status</th><th>Destaque</th><th>Publicado</th><th>Ações</th></tr>
+                </thead>
+                <tbody id="admin-projects-list">
+                  <tr><td colspan="8" class="td-loading">Carregando aplicações...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             6. REDE & CONECTIVIDADE
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-network" class="page-section">
+          <div class="section-card" style="max-width: 680px; margin: 0 auto; border: 1px solid rgba(56,189,248,0.25); background: linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(13,20,36,0.98) 100%);">
+            <div class="section-card-header" style="padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+              <div style="display:flex;align-items:center;gap:14px;">
+                <div style="width:48px;height:48px;border-radius:12px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">
+                  🌐
+                </div>
+                <div>
+                  <h2 class="section-card-title" style="font-size:1.25rem;font-weight:700;">Acesso SSH — ngrok (Externo)</h2>
+                  <p class="section-card-desc">Conexão direta e segura ao terminal do servidor via túnel TCP criptografado</p>
+                </div>
+              </div>
+              <span id="ssh-status-badge" class="status-chip status-chip-emerald">🟢 Ativo</span>
+            </div>
+
+            <div style="background:rgba(11,18,32,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:18px 20px;margin-top:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;font-weight:700;">Comando de Acesso Direto</span>
+                <span class="text-xs text-muted">Porta externa gerenciada</span>
+              </div>
+              <div class="nic-value nic-mono" id="ip-ngrok-ssh-ext" style="font-size:1.15rem;font-weight:700;color:#38bdf8;padding:10px 0;letter-spacing:0.5px;font-family:var(--font-mono, monospace);word-break:break-all;">carregando…</div>
+              <p style="font-size:0.8125rem;color:var(--text-3);margin:8px 0 0 0;line-height:1.5;">
+                Execute no seu computador (PowerShell, Prompt de Comando ou Terminal Linux/macOS) para acessar a máquina como usuário <code style="color:#c084fc;background:rgba(168,85,247,0.1);padding:2px 6px;border-radius:4px;">decsv</code>.
+              </p>
+            </div>
+
+            <div style="margin-top:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="copyNgrokSsh()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;font-weight:600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Copiar Comando SSH
+              </button>
+              <button class="btn btn-outline" onclick="openSshModal()" style="display:inline-flex;align-items:center;gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Ver Detalhes
+              </button>
+            </div>
+          </div>
+        </section>
+
+        
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             9. BACKUP & RECUPERAÇÃO GOOGLE DRIVE (CLEAN & MODERNO)
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-backup" class="page-section">
+          <!-- Card de Backup com Barrinha de Carregamento Limpa -->
+          <div class="section-card bkb-card-clean">
+            <div class="bkb-header-clean">
+              <div class="bkb-header-left">
+                <div class="bkb-icon-badge">☁️</div>
+                <div>
+                  <h2 class="bkb-title-clean">Backup do Servidor (Google Drive)</h2>
+                  <div class="bkb-sub-clean">
+                    Último backup: <strong id="bkb-last-date" style="color:#e2e8f0;">Nunca</strong> · Tamanho: <strong id="bkb-last-size" style="color:#e2e8f0;">--</strong>
+                  </div>
+                </div>
+              </div>
+              <span id="backup-onedrive-badge" class="status-chip status-chip-emerald">Pronto</span>
+            </div>
+
+            <!-- BARRINHA DE CARREGAMENTO MODERNA -->
+            <div class="bkb-progress-box-clean">
+              <div class="bkb-bar-header-clean">
+                <div class="bkb-step-label-clean">
+                  <span id="bkb-pulse-indicator" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#38bdf8;"></span>
+                  <span id="bkb-current-step-name">Pronto para iniciar</span>
+                </div>
+                <div class="bkb-pct-clean" id="bkb-progress-pct">0%</div>
+              </div>
+
+              <!-- Barra de Progresso com Gradiente e Brilho -->
+              <div class="bkb-track-clean">
+                <div class="bkb-fill-clean" id="bkb-progress-fill" style="width: 0%;"></div>
+              </div>
+
+              <!-- 3 Métricas Diretas (Sem textão) -->
+              <div class="bkb-stats-row-clean">
+                <div class="bkb-stat-chip">
+                  <span>⏱️ Tempo Restante:</span>
+                  <strong id="bkb-eta">--</strong>
+                </div>
+                <div class="bkb-stat-chip">
+                  <span>⚡ Velocidade:</span>
+                  <strong id="bkb-speed">--</strong>
+                </div>
+                <div class="bkb-stat-chip">
+                  <span>📦 Transferido:</span>
+                  <strong id="bkb-transferred">--</strong>
+                </div>
+                <div class="bkb-stat-chip" style="margin-left:auto;">
+                  <span>Nuvem:</span>
+                  <strong style="color:#38bdf8;">gdrive:DECAM_SERVER_BACKUP</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="bkb-actions-row">
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <button class="bkb-btn-run" id="btn-backup-now" onclick="triggerManualBackup()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  <span>Fazer Backup Agora</span>
+                </button>
+                <button class="bkb-btn-log" id="btn-toggle-terminal" onclick="toggleBackupTerminal()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  <span id="btn-terminal-label">Ver Logs do Terminal</span>
+                </button>
+              </div>
+              <div id="bkb-message" style="font-size:0.8125rem;color:#94a3b8;"></div>
+            </div>
+
+            <!-- Terminal Retrátil (opcional) -->
+            <div id="bkb-terminal-wrapper" class="hidden">
+              <div class="bkb-term-box">
+                <pre id="bkb-live-log-content" style="margin:0;font-family:inherit;">Aguardando logs de execução...</pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agendamentos -->
+          <div class="section-card" style="margin-top:20px;">
+            <div class="section-card-header">
+              <div>
+                <h3 class="section-card-title">⏰ Agendamentos de Backup</h3>
+                <p class="section-card-desc">Execução periódica automatizada no fuso oficial de Brasília (GMT-3).</p>
+              </div>
+            </div>
+            <div id="backup-jobs-list"></div>
+            <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="btn btn-outline btn-sm" onclick="addBackupJob()">+ Novo horário</button>
+              <button class="btn btn-primary btn-sm" id="btn-save-backup-jobs" onclick="saveBackupConfig()">Salvar agendamentos</button>
+              <span id="backup-jobs-hint" class="text-muted text-xs"></span>
+            </div>
+          </div>
+
+          <!-- Histórico & Restauração -->
+          <div class="section-card" style="margin-top:20px;">
+            <div class="section-card-header">
+              <div>
+                <h3 class="section-card-title">🗄️ Histórico de Snapshots & Restauração</h3>
+                <p class="section-card-desc">Snapshots armazenados para recuperação rápida ponto-no-tempo.</p>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="fetchBackupSnapshots()">⟳ Atualizar</button>
+            </div>
+            <div id="restore-active-banner" class="restore-banner hidden"></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Data do backup</th><th>ID Snapshot</th><th>Origem</th><th>Tamanho</th><th>Ação</th></tr></thead>
+                <tbody id="snapshots-tbody"><tr><td colspan="5" class="td-loading">Carregando histórico…</td></tr></tbody>
+              </table>
+            </div>
+            <span id="snapshots-hint" class="text-muted text-xs hidden" style="margin-top:8px"></span>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             10. AUDITORIA
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-audit" class="page-section">
+          <div class="section-card">
+            <div class="section-card-header">
+              <div>
+                <h2 class="section-card-title">📜 Trilha de Auditoria Administrativa</h2>
+                <p class="section-card-desc">Registro imutável de todas as ações de deploy, login e alterações</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th><th>IP Origem</th></tr></thead>
+                <tbody id="audit-logs-tbody"><tr><td colspan="5" class="td-loading">Carregando auditoria...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Auditoria do Terminal Web (audit.jsonl via /terminal-data) -->
+          <div class="section-card">
+            <div class="section-card-header">
+              <div>
+                <h2 class="section-card-title">🖥️ Auditoria do Terminal Web</h2>
+                <p class="section-card-desc">Logins, criação/encerramento de sessões e ações sincronizadas pelo Hub</p>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="fetchTerminalAuditLogs()">↻ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th><th>Sessão</th><th>IP</th><th>Resultado</th></tr></thead>
+                <tbody id="terminal-audit-tbody"><tr><td colspan="7" class="td-loading">Carregando auditoria do terminal...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             11. USUÁRIOS
+             ══════════════════════════════════════════════════════════════════ -->
+        <section id="page-users" class="page-section">
+          <!-- Gestão de Administradores (Linear Grade) -->
+          <div class="section-card">
+            <div class="section-card-header">
+              <div>
+                <h2 class="section-card-title">👥 Administradores & Gestão de Acessos</h2>
+                <p class="section-card-desc">Controle de privilégios de acesso (RBAC), envio de convites corporativos e auditoria de sessões ativas.</p>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn btn-outline btn-sm" onclick="loadHubUsers()">↻ Atualizar</button>
+                <button class="btn btn-primary btn-sm" onclick="openInviteAdminModal()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Convidar Administrador
+                </button>
+              </div>
+            </div>
+
+            <!-- Modern KPI Stats Grid -->
+            <div class="users-stats-grid">
+              <div class="user-stat">
+                <span class="user-stat-label">Total de Administradores</span>
+                <span class="user-stat-value" id="ustat-total">–</span>
+              </div>
+              <div class="user-stat">
+                <span class="user-stat-label">Contas Ativas</span>
+                <span class="user-stat-value" id="ustat-active" style="color:#10b981;">–</span>
+              </div>
+              <div class="user-stat">
+                <span class="user-stat-label">Convites Pendentes</span>
+                <span class="user-stat-value" id="ustat-pending" style="color:#f59e0b;">–</span>
+              </div>
+              <div class="user-stat">
+                <span class="user-stat-label">Sessões Ativas</span>
+                <span class="user-stat-value" id="ustat-sessions" style="color:#38bdf8;">–</span>
+              </div>
+            </div>
+
+            <div id="users-msg" class="error-banner hidden" style="margin-bottom:16px;"></div>
+
+            <!-- Administrators Table -->
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Administrador</th>
+                    <th>Nível de Acesso</th>
+                    <th>Status da Conta</th>
+                    <th>Último Acesso</th>
+                    <th>Sessões</th>
+                    <th style="text-align:right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody">
+                  <tr><td colspan="6" class="td-loading">Carregando administradores…</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 18px;margin-top:20px;display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.25rem;">🔒</span>
+              <p class="section-card-desc" style="margin:0;font-size:0.8125rem;color:var(--text-3);">
+                A conta <strong>ROOT</strong> possui proteção criptográfica máxima e privilégio total de orquestração do servidor DECAM. Contas de novos administradores recebem links de ativação com validade de 48h enviados via Brevo SMTP corporativo.
+              </p>
+            </div>
+          </div>
+
+          
+        </section>
+
+        
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       MODALS
+       ========================================================================= -->
+
+  <!-- Modal: Nova/Editar Aplicação (Portal) -->
+  <div id="project-modal" class="modal-overlay">
+    <div class="modal-box modal-lg">
+      <div class="modal-head">
+        <h3 id="project-modal-title">Nova Aplicação</h3>
+        <button class="modal-close" onclick="closeProjectModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="proj-error-msg" class="error-banner hidden"></div>
+        <input type="hidden" id="proj-id" />
+        <div class="form-grid-2">
+          <div class="form-field"><label for="proj-name">Nome da Aplicação *</label><input type="text" id="proj-name" required /></div>
+          <div class="form-field"><label for="proj-category">Categoria</label><input type="text" id="proj-category" /></div>
+          <div class="form-field"><label for="proj-icon">Ícone (Emoji)</label><input type="text" id="proj-icon" value="🌐" /></div>
+          <div class="form-field"><label for="proj-status">Status</label><select id="proj-status"><option value="online">Online</option><option value="maintenance">Manutenção</option><option value="offline">Offline</option></select></div>
+          <div class="form-field" style="grid-column:span 2"><label for="proj-url">URL de Acesso *</label><input type="text" id="proj-url" required /></div>
+          <div class="form-field" style="grid-column:span 2"><label for="proj-desc">Descrição</label><textarea id="proj-desc"></textarea></div>
+        </div>
+        <div class="toggle-group">
+          <label class="toggle-row"><span>Destacar no Portal</span><div class="toggle-switch"><input type="checkbox" id="proj-featured"><span class="toggle-slider"></span></div></label>
+          <label class="toggle-row"><span>Publicado</span><div class="toggle-switch"><input type="checkbox" id="proj-published" checked><span class="toggle-slider"></span></div></label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-outline" onclick="closeProjectModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitProjectSave()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Versões & Rollback (Deploy Center) -->
+  <div id="versions-modal" class="modal-overlay">
+    <div class="modal-box modal-lg">
+      <div class="modal-head">
+        <h3 id="versions-modal-title">Histórico de Versões</h3>
+        <button class="modal-close" onclick="closeVersionsModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Versão</th><th>Data</th><th>Porta</th><th>Saúde</th><th>Ação</th></tr></thead>
+            <tbody id="app-versions-tbody"><tr><td colspan="5" class="td-loading">Carregando versões...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: SSH -->
+  <div id="ssh-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Acesso SSH ao Servidor</h3>
+        <button class="modal-close" onclick="closeSshModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="ssh-option highlight-ssh">
+          <div class="ssh-option-header"><span class="ssh-badge">Ngrok TCP Tunnel (Externo)</span><span class="status-dot-online">● Ativo</span></div>
+          <div class="code-row"><code id="modal-ssh-cmd">ssh decsv@0.tcp.sa.ngrok.io -p 16898</code><button class="btn btn-sm btn-outline" onclick="copyNgrokSsh()">Copiar</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmar Restauração -->
+  <div id="restore-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>↩ Restaurar Backup</h3>
+        <button class="modal-close" onclick="closeRestoreModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="restore-modal-info" style="margin:0 0 14px"></p>
+        <div class="form-field" style="margin-bottom:12px">
+          <label for="restore-include">Restaurar apenas caminhos específicos (opcional, um por linha)</label>
+          <textarea id="restore-include" rows="3" placeholder="~/&#46;gemini/antigravity/scratch/home-server/dashboard"></textarea>
+        </div>
+        <label class="bj-switch" style="margin-bottom:14px">
+          <input type="checkbox" id="restore-dryrun" /> Simular primeiro (não altera nada)
+        </label>
+        <div id="restore-modal-error" class="error-banner hidden"></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px">
+          <button class="btn btn-outline" onclick="closeRestoreModal()">Cancelar</button>
+          <button class="btn btn-primary" id="btn-confirm-restore" onclick="confirmRestore()">Confirmar restauração</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Criar / Editar usuário -->
+  <div id="user-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="user-modal-title">+ Criar usuário</h3>
+        <button class="modal-close" onclick="closeUserModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="user-modal-error" class="error-banner hidden"></div>
+        <form id="user-form" class="auth-form" onsubmit="event.preventDefault(); submitUserForm();">
+          <input type="hidden" id="uf-id" />
+          <div class="form-field">
+            <label for="uf-name">Nome completo *</label>
+            <input type="text" id="uf-name" required maxlength="80" placeholder="João Silva" />
+          </div>
+          <div class="form-field">
+            <label for="uf-username">Usuário * (2-32: a-z, 0-9, _ -)</label>
+            <input type="text" id="uf-username" required pattern="[a-z0-9_\-]{2,32}" placeholder="joao" autocomplete="off" />
+          </div>
+          <div class="form-field">
+            <label for="uf-email">E-mail (opcional)</label>
+            <input type="email" id="uf-email" placeholder="joao@exemplo.com" />
+          </div>
+          <div class="form-field">
+            <label for="uf-role">Nível de acesso *</label>
+            <select id="uf-role">
+              <option value="user1">Nível 1 — Usuário (somente IAs, sem shell)</option>
+              <option value="developer">Developer (shell + dev, sem deploy/arquivos)</option>
+              <option value="sysadmin">Sysadmin (administra usuários comuns)</option>
+            </select>
+            <p class="section-card-desc" style="margin:6px 0 0">
+              Contas ROOT não são criadas nem alteradas pela API — a conta ROOT é protegida.
+            </p>
+          </div>
+          <div class="form-field" id="uf-password-wrap">
+            <label for="uf-password" id="uf-password-label">Senha * (mínimo 6 caracteres)</label>
+            <input type="password" id="uf-password" minlength="6" autocomplete="new-password" />
+          </div>
+          <label class="bj-switch" style="margin:4px 0 10px">
+            <input type="checkbox" id="uf-active" checked /> Conta ativa
+          </label>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">
+            <button type="button" class="btn btn-outline" onclick="closeUserModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btn-user-save">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="admin.js?v=20260919_clean_v2"></script>
+
+    <!-- MODAL: CONVIDAR NOVO ADMINISTRADOR -->
+    <div id="modal-invite-admin" class="app-modal-backdrop">
+      <div class="app-modal-card">
+        <div class="app-modal-header">
+          <h3 class="app-modal-title">
+            <span>👥 Convidar Novo Administrador</span>
+          </h3>
+          <button type="button" class="app-modal-close" onclick="closeInviteAdminModal()">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); submitInviteAdmin();">
+          <div class="app-modal-body">
+            <div id="invite-admin-error" class="error-banner hidden"></div>
+            <div class="form-field">
+              <label for="invite-admin-name">Nome Completo *</label>
+              <input type="text" id="invite-admin-name" placeholder="Ex.: Carlos Mendes" required autocomplete="off" />
+            </div>
+            <div class="form-field">
+              <label for="invite-admin-email">E-mail Corporativo *</label>
+              <input type="email" id="invite-admin-email" placeholder="usuario@expressonepomuceno.com.br" required autocomplete="off" />
+            </div>
+            <div class="form-field">
+              <label for="invite-admin-role">Nível de Acesso (RBAC) *</label>
+              <select id="invite-admin-role" required>
+                <option value="sysadmin">SysAdmin — Acesso a Servidor, Backups e Docker</option>
+                <option value="developer">Desenvolvedor — Acesso a Aplicações e Logs</option>
+                <option value="user1">Operador — Somente Leitura</option>
+              </select>
+            </div>
+            <div style="background:rgba(2,132,199,0.08);border:1px solid rgba(2,132,199,0.25);border-radius:8px;padding:12px;font-size:0.8125rem;color:#7dd3fc;display:flex;gap:10px;align-items:flex-start;">
+              <span>✉️</span>
+              <div>Um e-mail de ativação será enviado automaticamente pelo Brevo SMTP contendo um link exclusivo para que este administrador defina sua própria senha com segurança.</div>
+            </div>
+          </div>
+          <div class="app-modal-footer">
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeInviteAdminModal()">Cancelar</button>
+            <button type="submit" id="btn-submit-invite" class="btn btn-primary btn-sm">Enviar Convite por E-mail</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: DEFINIÇÃO DE SENHA VIA LINK DE E-MAIL -->
+    <div id="modal-set-password" class="app-modal-backdrop">
+      <div class="app-modal-card" style="max-width:480px;">
+        <div class="app-modal-header">
+          <h3 class="app-modal-title">
+            <span>🔐 Definir Senha de Acesso</span>
+          </h3>
+        </div>
+        <form onsubmit="event.preventDefault(); submitSetPassword();">
+          <div class="app-modal-body">
+            <p class="section-card-desc" style="margin:0 0 12px 0;">
+              Bem-vindo ao <strong>DECAM HomeHub</strong>! Defina sua senha pessoal de acesso para ativar sua conta.
+            </p>
+            <div id="set-pw-error" class="error-banner hidden"></div>
+            <div id="set-pw-success" class="alert-banner alert-warning hidden" style="background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.3);color:#6ee7b7;"></div>
+            
+            <input type="hidden" id="set-pw-token" value="" />
+            
+            <div class="form-field">
+              <label for="set-pw-new">Nova Senha *</label>
+              <input type="password" id="set-pw-new" minlength="6" required autocomplete="new-password" placeholder="Mínimo 6 caracteres" oninput="checkPwStrength(this.value, 'invite-pw-strength')" />
+              <div class="pw-strength-bar"><div id="invite-pw-strength-fill" class="pw-strength-fill"></div></div>
+              <div class="pw-strength-text"><span id="invite-pw-strength-label" class="text-muted">Força da senha</span></div>
+            </div>
+            <div class="form-field">
+              <label for="set-pw-confirm">Confirmar Nova Senha *</label>
+              <input type="password" id="set-pw-confirm" minlength="6" required autocomplete="new-password" placeholder="Repita a senha" />
+            </div>
+          </div>
+          <div class="app-modal-footer">
+            <button type="submit" id="btn-submit-set-pw" class="btn btn-primary" style="width:100%">Salvar Senha & Acessar Painel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+</body>
+</html>

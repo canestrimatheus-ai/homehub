@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal de Aplicações — Expresso Nepomuceno</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css?v=20260831_saas_v1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>">
+</head>
+<body class="portal-body">
+
+  <div class="portal-wrapper">
+
+    <!-- CORPORATE HEADER -->
+    <header class="portal-header">
+      <div class="portal-header-left">
+        <div class="corporate-brand" id="logo-secret-trigger" title="Portal Corporativo de Aplicações">
+          <div class="brand-logo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            </svg>
+          </div>
+          <div class="brand-text-block">
+            <span class="brand-company-name">Expresso Nepomuceno</span>
+            <span class="brand-portal-title">Portal de Aplicações</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="portal-header-right">
+        <!-- Global System Status Badge -->
+        <div class="system-status-indicator" id="global-status-indicator" title="Monitoramento de Saúde dos Sistemas">
+          <span class="status-dot-ping" id="status-dot"></span>
+          <span class="status-label" id="status-text">Todos os sistemas operacionais</span>
+        </div>
+
+        <!-- Search Trigger in Header (Desktop) -->
+        <div class="header-search-bar">
+          <svg class="header-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="header-search-input" placeholder="Buscar aplicação... (pressione '/')" oninput="handleSearch(this.value)">
+          <kbd class="shortcut-kbd">/</kbd>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Alternar Modo Claro / Escuro">
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1"></line><line x1="21"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+
+        <!-- Admin Access Trigger -->
+        <a href="/admin" class="admin-link-btn" title="Área Administrativa">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <!-- HERO SECTION -->
+    <section class="portal-hero">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        <span>Acesso Seguro & Unificado</span>
+      </div>
+      <h1 class="portal-hero-title">Portal de Aplicações</h1>
+      <p class="portal-hero-description">
+        Acesse de forma rápida e centralizada todas as ferramentas e aplicações da empresa.
+      </p>
+    </section>
+
+    <!-- CATEGORIES & CONTROLS -->
+    <nav class="portal-nav-bar">
+      <div class="category-tabs-scroll" id="category-tabs-container">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT SECTIONS -->
+    <main class="portal-main-content">
+      
+      <!-- FEATURED APPLICATIONS SECTION -->
+      <section class="portal-section" id="featured-section">
+        <div class="section-title-row">
+          <div class="section-heading-wrap">
+            <span class="section-badge-icon">⭐</span>
+            <h2 class="section-main-heading">Aplicações em Destaque</h2>
+          </div>
+          <span class="section-subtext">Ferramentas mais utilizadas da organização</span>
+        </div>
+
+        <div class="featured-grid" id="featured-cards-grid">
+          <!-- Skeletons rendered initially -->
+        </div>
+      </section>
+
+      <!-- ALL APPLICATIONS SECTION -->
+      <section class="portal-section" id="all-apps-section">
+        <div class="section-title-row">
+          <div class="section-heading-wrap">
+            <span class="section-badge-icon">📂</span>
+            <h2 class="section-main-heading" id="catalog-title">Todas as Aplicações</h2>
+          </div>
+          <span class="catalog-counter-pill" id="catalog-count-pill">0 aplicações disponíveis</span>
+        </div>
+
+        <div class="apps-grid" id="all-cards-grid">
+          <!-- Skeletons rendered initially -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- CORPORATE FOOTER -->
+    <footer class="portal-footer">
+      <div class="footer-corporate-info">
+        <span class="footer-brand-name">Expresso Nepomuceno S.A.</span>
+        <span class="footer-separator">&bull;</span>
+        <span>Portal Corporativo Oficial</span>
+      </div>
+      <div class="footer-links">
+        <span class="footer-status-pill">
+          <span class="footer-dot-green"></span>
+          Ambiente Seguro & Monitorado
+        </span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="app.js?v=decam_1790883297"></script>
+</body>
+</html>

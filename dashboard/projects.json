@@ -1,0 +1,100 @@
+[
+  {
+    "id": "decam-agenda",
+    "slug": "decam-agenda",
+    "name": "DECAM - Instrutores & Agenda",
+    "description": "Gestão de instrutores, agenda e escala operacional DECAM.",
+    "icon": "📅",
+    "category": "Operações",
+    "badge": "Operações",
+    "url": "https://eulernasc.github.io/DECAM/",
+    "status": "online",
+    "featured": true,
+    "published": true,
+    "tags": [
+      "DECAM",
+      "Instrutores",
+      "Agenda",
+      "Operações"
+    ]
+  },
+  {
+    "id": "app-f394b32b",
+    "slug": "decam-3d-f394b32b",
+    "name": "DECAM - 3D",
+    "description": "",
+    "icon": "🚀",
+    "category": "Operações",
+    "badge": "Operações",
+    "url": "/apps/decam-3d-f394b32b/",
+    "status": "online",
+    "featured": true,
+    "published": true,
+    "tags": [
+      "Deploy Center",
+      "Operações"
+    ]
+  },
+  {
+    "id": "ridecheck-web",
+    "slug": "ridecheck",
+    "name": "RideCheck",
+    "description": "Painel administrativo do ecossistema RideCheck — operações, motoristas, tarefas, B.I. e API do app mobile.",
+    "icon": "🚛",
+    "category": "Operações",
+    "badge": "SaaS",
+    "url": "/ridecheck/",
+    "status": "online",
+    "featured": true,
+    "published": true,
+    "tags": [
+      "Operações",
+      "Motoristas",
+      "B.I.",
+      "Mobile"
+    ]
+  },
+  {
+    "id": "telemetria-pgcsc",
+    "name": "PGCSC - Telemetria",
+    "category": "Operações",
+    "icon": "⚡",
+    "url": "/telemetria/",
+    "description": "Gestão de Reciclagens e Prevenção ao Excesso de Velocidade - Expresso Nepomuceno.",
+    "status": "online",
+    "featured": true,
+    "published": true,
+    "slug": "telemetria",
+    "badge": "Telemetria",
+    "tags": [
+      "Operações",
+      "Telemetria",
+      "Segurança",
+      "Reciclagens"
+    ]
+  },
+  {
+    "id": "app-a622340d",
+    "name": "Book do Motorista",
+    "category": "Documentos",
+    "icon": "📚",
+    "url": "/apps/book-do-motorista-a622340d/",
+    "description": "Sistema interno para gestão, armazenamento, consulta, rastreabilidade e organização documental dos motoristas.",
+    "status": "online",
+    "featured": true,
+    "published": true,
+    "slug": "book-do-motorista-a622340d",
+    "subpath": true
+  },
+  {
+    "id": "proj-96d0570f",
+    "name": "Vistorias",
+    "category": "Geral",
+    "icon": "🌐",
+    "url": "/vistorias",
+    "description": "",
+    "status": "online",
+    "featured": true,
+    "published": true
+  }
+]

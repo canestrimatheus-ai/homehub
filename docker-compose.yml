@@ -1,0 +1,341 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: homeserver-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: homeserver
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: homedb
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeserver -d homedb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.4
+    container_name: homeserver-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: homedb
+      MYSQL_USER: homeserver
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "homeserver", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: homeserver-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: homeserver-adminer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+      - mysql
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: homeserver-portainer
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/portainer:/data
+
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: homeserver-socket-proxy
+    restart: unless-stopped
+    # Filter list for Docker daemon — allowlist mínima dos comandos que o
+    # HomeHub usa (deploy_engine/radar): ps, inspect, logs, run, rm, stop,
+    # start, restart, build, rmi, system df e prunes. Tudo o resto → 403.
+    # Hardening 2026-09-09 (task_0003): EXEC=0 — os dois únicos usos de
+    # `docker exec` (fallback ngrok em app.py:_get_ngrok_info e cat do
+    # ngrok.yml em deploy_engine._guess_public_url) foram removidos; HTTP
+    # + `docker logs` (GET, só CONTAINERS=1) cobrem. POST /exec/*/start
+    # agora dá 403; POST=1 mantido p/ build/run/restart/stop/rm/prune.
+    # SWARM/SERVICES/etc nem aparecem aqui = default 0 da imagem.
+    environment:
+      - CONTAINERS=1
+      - EXEC=0
+      - IMAGES=1
+      - BUILD=1
+      - SYSTEM=1
+      - NETWORKS=1
+      - VOLUMES=1
+      - POST=1
+      - LOG_LEVEL=warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  homehub:
+    build: ./dashboard
+    container_name: homehub-dashboard
+    restart: unless-stopped
+    # Hardening: o container NÃO tem mais o docker.sock montado — fala com o
+    # daemon apenas via socket-proxy (allowlist de endpoints). uid 1000 = 'decsv'.
+    user: "1000:1000"
+    depends_on:
+      - socket-proxy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./dashboard:/app
+      # Gerenciador de Arquivos do HomeHub com escopo mínimo.
+      # Hardening 2026-09-09: antes montava /home/decsv INTEIRA (com ~/.ssh,
+      # ~/.gnupg, .env) em /hosthome. Agora só Documentos (= FILES_ROOT).
+      - /home/decsv/Documentos:/hosthome/Documentos
+      # Logs/registro/auditoria do Web Terminal (somente leitura) — alimenta
+      # as páginas Administração > Terminais e Auditoria.
+      - ./data/web-terminal:/terminal-data:ro
+    environment:
+      - HOST_IP=10.11.2.147
+      - TAILSCALE_IP=100.92.242.64
+      - NODE_ENV=production
+      # Raiz do Gerenciador de Arquivos dentro do container. Só a pasta
+      # Documentos fica visível — a home/ ~/.ssh, .gnupg não são acessíveis
+      # mesmo para quem tiver sessão no painel.
+      - FILES_ROOT=/hosthome/Documentos
+      # O CLI do Docker precisa de um $HOME gravável para o BuildKit criar
+      # /.docker. Como rodamos como usuário não-root (1000) sem entrada no
+      # /etc/passwd, HOME caía para "/" e o build falhava com
+      # "mkdir /.docker: permission denied". Apontamos para o bind-mount
+      # gravável /app.
+      - HOME=/app
+      - DOCKER_CONFIG=/app/.docker
+      # Docker via socket-proxy em vez do socket direto.
+      - DOCKER_HOST=tcp://socket-proxy:2375
+      # Builder legado (sem BuildKit): não depende de baixar moby/buildkit de
+      # fora nem de container buildx com rede própria — mais simples e estável
+      # para atravessar the socket-proxy (POST /build).
+      - DOCKER_BUILDKIT=0
+      # Integração com o Terminal (gestão de usuarios + sessoes + auditoria):
+      # segredo admin para sincronizar usuarios via API do terminal e URL dele.
+      - TERMINAL_ADMIN_SECRET=${TTYD_PASS}
+      # Chamadas server-side Hub → API admin do terminal. Usa o DNS da rede do
+      # compose (serviço 'terminal'); host.docker.internal não resolve aqui.
+      - TERMINAL_URL=http://terminal:7681
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - CLOUDFLARE_TUNNEL_URL=https://decamservice.com
+    networks:
+      - default
+      - book-do-motorista_book_motorista_network
+
+  decam:
+    image: nginx:alpine
+    container_name: homeserver-decam
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - /home/decsv/Downloads/Thing:/usr/share/nginx/html:ro
+      - ./decam/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./decam/.htpasswd:/etc/nginx/.htpasswd:ro
+      - /home/decsv/Downloads/Thing-v2:/usr/share/nginx/html-v2:ro
+
+  # ngrok REMOVIDO 17/09/2026 — substituído pelo Cloudflare Tunnel nomeado
+  # (gateway fixo decamservice.com, sem cota). O container está parado e este
+  # bloco fica comentado para o `docker compose up` não subir de novo.
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   container_name: homeserver-ngrok
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   volumes:
+  #     - ./ngrok.yml:/etc/ngrok.yml
+  #   command: start --all --config /etc/ngrok.yml
+  #   depends_on:
+  #     - postgres
+  #     - mysql
+  #     - redis
+  #     - decam
+  #     - homehub
+  #     - terminal
+
+  cloudflare:
+    image: cloudflare/cloudflared:latest
+    container_name: homeserver-cloudflare
+    restart: unless-stopped
+    network_mode: host
+    # TÚNEL NOMEADO "decamservice" (remote-managed: config fica no Cloudflare,
+    # via Zero Trust ou API — NÃO no container). URLs fixas em decamservice.com
+    # (desde 17/09/2026; antes era quick-tunnel trycloudflare com URL mutável):
+    #   decamservice.com + www       -> nginx decam       (localhost:8000)
+    #   home.decamservice.com        -> HomeHub dashboard (localhost:3000)
+    #   ridecheck.decamservice.com   -> RideCheck web     (localhost:3001)
+    #   book.decamservice.com        -> Book do Motorista (localhost:3010)
+    #   telemetria.decamservice.com  -> Telemetria        (localhost:5005)
+    #   terminal.decamservice.com    -> Terminal web      (localhost:7681)
+    #   app.decamservice.com         -> hh-app            (localhost:4001)
+    #   demais hostnames             -> http_status:404 (catch-all)
+    # Procurar o config no dashboard: Zero Trust > Networks > Tunnels > decamservice.
+    # `scripts/cloudflare-url` está obsoleto para este túnel (URL fixa agora).
+    # ATENÇÃO: decamservice.com e www usam HTTP na origem (nginx:8000) — nunca
+    # https://localhost:8000 (já causou 502: "tls: first record does not look...").
+
+    command: tunnel --no-autoupdate run --token eyJhIjoiZTI2YTIxMzkyNTdiZWY4MWRiMzEyNDkzM2VjNDQzMWEiLCJ0IjoiMDg5YjE3MmEtOTM5OS00ZDU2LWJlYjYtODVlYzAwZGE5MzQwIiwicyI6Ik9XWTNNRFV6WXpFdE5qZzBZeTAwT1RBMExUazBZek10TjJSak5XSXlORGxoTmpJNSJ9
+    depends_on:
+      - decam
+
+
+
+  ridecheck-web:
+    build: ./ridecheck-web
+    container_name: ridecheck-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+      # O painel é servido sob /ridecheck no gateway decam (nginx).
+      # Precisa ser igual ao que foi usado no build do Dockerfile (imagem).
+      - NEXT_PUBLIC_BASE_PATH=/ridecheck
+      - WHATSAPP_SERVICE_URL=http://ridecheck-whatsapp:3005
+      - DATABASE_URL=postgresql://ridecheck:${RIDECHECK_DB_PASSWORD}@postgres:5432/ridecheck?schema=public&connection_limit=30&pool_timeout=15
+      - AUTH_SECRET=${AUTH_SECRET}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - MOBILE_API_SECRET=${MOBILE_API_SECRET}
+      - MOBILE_API_TOKEN_TTL_HOURS=168
+      - MOBILE_APP_URL=${MOBILE_APP_URL}
+      - APP_URL=${APP_URL}
+      - NEXTAUTH_URL=${APP_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - CRON_SECRET=${CRON_SECRET}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
+      # E-mail (opcional — sem credenciais o app apenas loga e não envia)
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_SECURE=${SMTP_SECURE}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      # IA / upload (opcional)
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/ridecheck/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  # # App mobile (Expo/React Native) — repositório separado (ridecheck-mobile).
+  # # Quando o repositório existir neste servidor, mapeie o trecho abaixo:
+  # ridecheck-mobile:
+  #   build: ./ridecheck-mobile
+  #   container_name: ridecheck-mobile
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8081:8081"
+  #   depends_on:
+  #     - ridecheck-web
+
+
+  telemetria:
+    image: pgcsc-telemetria:latest
+    build: ./telemetria
+    container_name: pgcsc-telemetria
+    restart: unless-stopped
+    ports:
+      # Hardening 2026-09-09: publicada só em localhost. O gateway decam
+      # alcança via rede docker (telemetria:5000); sem auth nos /api/config/*,
+      # a porta 5005 jamais pode ficar aberta para a LAN.
+      - "127.0.0.1:5005:5000"
+    volumes:
+      - /home/decsv/telemetria:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BASE_PATH=/telemetria
+      # Defesa em profundidade (task_0002 / 2026-09-09): token de escrita
+      # opcional do Flask (header X-Write-Token p/ POST/PUT/DELETE). Vazio =
+      # mantém comportamento atual (basic auth do gateway em /telemetria).
+      # O dono deve definir TELEMETRIA_WRITE_TOKEN no .env do home-server.
+      - TELEMETRIA_WRITE_TOKEN=${TELEMETRIA_WRITE_TOKEN:-}
+
+  ridecheck-whatsapp:
+    build:
+      context: /home/decsv/ridecheck-whatsapp
+    container_name: ridecheck-whatsapp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3005:3005"
+    volumes:
+      - /home/decsv/ridecheck-whatsapp/.wwebjs_auth:/app/.wwebjs_auth
+    mem_limit: 1024m
+    cpus: 1.0
+    networks:
+      - default
+
+  decam-ia:
+    build:
+      context: /home/decsv/decam-ia
+    container_name: decam-ia
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3006:3006"
+    volumes:
+      - /home/decsv/decam-ia/data:/app/data
+    environment:
+      - PORT=3006
+      - NODE_ENV=production
+      - JWT_SECRET=decam_ia_nepomuceno_secret_token_2026
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SMTP_HOST=smtp-relay.brevo.com
+      - SMTP_PORT=587
+      - SMTP_USER=a89907001@smtp-brevo.com
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=nao-responda@decamservice.com
+      - PORTAL_URL=https://decamservice.com/ia
+    mem_limit: 512m
+    cpus: 1.0
+    networks:
+      - default
+
+networks:
+  default:
+  book-do-motorista_book_motorista_network:
+    external: true

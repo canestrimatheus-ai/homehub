@@ -1,0 +1,45 @@
+{
+  "timezone": "America/Sao_Paulo",
+  "jobs": [
+    {
+      "id": "servidor",
+      "name": "Servidor completo",
+      "enabled": true,
+      "kind": "restic-gdrive",
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "hour": 16,
+      "minute": 0,
+      "keep_weekly": 4,
+      "keep_monthly": 3,
+      "cloud": true
+    },
+    {
+      "id": "008e34c38b",
+      "name": "Novo backup",
+      "enabled": true,
+      "kind": "restic-gdrive",
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "hour": 0,
+      "minute": 0,
+      "keep_weekly": 4,
+      "keep_monthly": 3,
+      "cloud": true
+    }
+  ]
+}

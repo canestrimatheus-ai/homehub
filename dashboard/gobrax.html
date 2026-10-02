@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gobrax - Gamificação para motoristas</title>
+  
+  <!-- Fontes Oficiais Gobrax -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Outfit:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- html2canvas para exportação de print perfeita (PNG HD) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    :root {
+      --bg-page: #F5F6F8;
+      --bg-card: #FFFFFF;
+      --text-dark: #2C3E50;
+      --text-gray: #4A5568;
+      --text-muted: #8E9AAB;
+      --text-subtle: #A0AEC0;
+      --border-card: #ECEEF2;
+      --gobrax-yellow: #FFC20E;
+      --btn-yellow: #F7D438;
+      --color-green: #00D26A;
+      --color-amber: #FFAA00;
+      --color-blue: #0088FE;
+      --color-red: #E63946;
+      --font-main: 'Roboto', 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-page);
+      color: var(--text-dark);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      font-size: 13px;
+    }
+
+    /* Container de Captura Principal */
+    #dashboard-capture-area {
+      width: 100%;
+      max-width: 1540px;
+      margin: 0 auto;
+      background-color: var(--bg-page);
+      position: relative;
+    }
+
+    /* Utilitário Edição Direta */
+    [contenteditable="true"] {
+      outline: 2px dashed #3B82F6 !important;
+      outline-offset: 2px;
+      border-radius: 4px;
+      background-color: rgba(59, 130, 246, 0.08) !important;
+      cursor: text;
+    }
+    [contenteditable="true"]:focus {
+      outline: 2px solid #2563EB !important;
+      background-color: rgba(59, 130, 246, 0.15) !important;
+    }
+
+    /* 1. TOP HEADER (LOGO GOBRAX & EMPRESA) */
+    .top-header {
+      background-color: #FFFFFF;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      position: relative;
+      border-bottom: 1px solid #F0F2F5;
+    }
+
+    .top-header .logo-container {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .gobrax-header-img {
+      height: 30px;
+      object-fit: contain;
+      user-select: none;
+    }
+
+    .top-header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .company-selector-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-office {
+      width: 16px;
+      height: 16px;
+      color: #374151;
+      display: flex;
+      align-items: center;
+    }
+
+    .company-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .company-info .label {
+      font-size: 9.5px;
+      color: #9CA3AF;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .company-dropdown-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: none;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #374151;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+    }
+
+    .avatar-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #F1F3F6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6B7280;
+      cursor: pointer;
+    }
+
+    /* 2. SUB-CABEÇALHO COM FILTROS */
+    .filter-subheader-bar {
+      background-color: #FFFFFF;
+      padding: 10px 32px 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid #ECEEF2;
+    }
+
+    .page-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #4B5563;
+      white-space: nowrap;
+      min-width: 220px;
+    }
+
+    .filter-pills-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      justify-content: center;
+      max-width: 860px;
+    }
+
+    .pill-select {
+      background: #FFFFFF;
+      border: 1px solid #D5D9E0;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #374151;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .pill-select.pill-driver {
+      flex: 1.2;
+      justify-content: space-between;
+      max-width: 320px;
+    }
+
+    .pill-select.pill-date {
+      flex: 1;
+      justify-content: center;
+      max-width: 220px;
+      color: #4B5563;
+    }
+
+    .pill-select.pill-fleet {
+      flex: 1;
+      justify-content: space-between;
+      max-width: 210px;
+    }
+
+    .fleet-tag {
+      background-color: #F1F3F6;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-imprimir {
+      background-color: var(--btn-yellow);
+      color: #1F2937;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: none;
+      border-radius: 18px;
+      padding: 7px 32px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-imprimir:hover {
+      filter: brightness(0.96);
+    }
+
+    /* 3. CORPO DO DASHBOARD */
+    .dashboard-body {
+      padding: 22px 32px 36px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .dashboard-row {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 20px;
+    }
+
+    /* CARDS */
+    .dash-card {
+      background-color: var(--bg-card);
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.025);
+      border: 1px solid var(--border-card);
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #1F2937;
+      letter-spacing: -0.1px;
+    }
+
+    /* CARD 1: DESEMPENHO */
+    .desempenho-card {
+      align-items: center;
+      text-align: center;
+      justify-content: space-between;
+    }
+
+    .desempenho-card .card-header {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .gauge-wrapper {
+      position: relative;
+      width: 132px;
+      height: 132px;
+      margin: 4px auto 6px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .gauge-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .gauge-bg-circle {
+      fill: none;
+      stroke: #F3F4F6;
+      stroke-width: 12;
+    }
+
+    .gauge-value-circle {
+      fill: none;
+      stroke: var(--color-green);
+      stroke-width: 12;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+    }
+
+    .gauge-center-text {
+      position: absolute;
+      font-size: 38px;
+      font-weight: 700;
+      color: #4A5568;
+      line-height: 1;
+      user-select: none;
+    }
+
+    /* METADADOS DO VEÍCULO (Coluna vertical no canto inferior esquerdo com traços finos) */
+    .vehicle-metadata-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-self: flex-start;
+      margin-top: 6px;
+      padding-left: 2px;
+      text-align: left;
+    }
+
+    .vehicle-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #2C3E50;
+      line-height: 1.2;
+    }
+
+    .vehicle-meta-icon {
+      width: 13px;
+      height: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #2C3E50;
+    }
+
+    /* CARD 2: INDICADORES */
+    .indicadores-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-grafico-toggle {
+      background: #F3F4F6;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 2px 9px;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #9CA3AF;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .indicadores-carousel-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    .carousel-arrow-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background-color: #E5E7EB;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6B7280;
+      cursor: pointer;
+      position: absolute;
+      z-index: 5;
+      font-size: 11px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .carousel-arrow-btn.left {
+      left: -8px;
+    }
+    .carousel-arrow-btn.right {
+      right: -8px;
+    }
+
+    .indicadores-list {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      width: 100%;
+      padding: 4px 10px;
+      scrollbar-width: none;
+    }
+    .indicadores-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .indicador-item {
+      flex: 1 0 106px;
+      min-width: 106px;
+      background: #FFFFFF;
+      border: 1px solid #ECEEF2;
+      border-radius: 14px;
+      padding: 12px 8px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .indicador-item:hover {
+      border-color: #CBD5E1;
+      transform: translateY(-1px);
+    }
+
+    .indicador-val {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .indicador-time {
+      font-size: 10px;
+      color: #9CA3AF;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .indicador-stars {
+      display: flex;
+      gap: 1.5px;
+      font-size: 10.5px;
+      margin-bottom: 8px;
+      height: 13px;
+      align-items: center;
+    }
+
+    .indicador-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #4B5563;
+      line-height: 1.25;
+      min-height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* CARD 3: PRESSÃO DO ACELERADOR */
+    .pressao-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .info-icon-btn {
+      color: #9CA3AF;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .bars-chart-container {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      height: 140px;
+      padding: 8px 4px 4px 4px;
+      gap: 10px;
+    }
+
+    .bar-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      max-width: 58px;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 100px;
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .bar-fill {
+      width: 100%;
+      transition: height 0.4s ease, background-color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .bar-percentage-tag {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #111827;
+      z-index: 2;
+      white-space: nowrap;
+      padding: 2px 0;
+    }
+
+    .bar-legend {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 8px;
+      font-size: 10.5px;
+      color: #4B5563;
+      font-weight: 500;
+    }
+
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .pressao-stars-row {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      font-size: 11px;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    /* CARD 4: ESTATÍSTICAS */
+    .estatisticas-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, auto);
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .stat-card {
+      background-color: #FAFAFB;
+      border: 1px solid #ECEEF2;
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 70px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .stat-card:hover {
+      border-color: #CBD5E1;
+      background-color: #FFFFFF;
+    }
+
+    .stat-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .stat-icon {
+      width: 18px;
+      height: 18px;
+      color: #1F2937;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-label {
+      font-size: 10.5px;
+      color: #6B7280;
+      font-weight: 500;
+      text-align: right;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .stat-val {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #111827;
+      text-align: right;
+      margin-top: 6px;
+    }
+
+    /* BARRA RÁPIDA INFERIOR */
+    .quick-actions-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 998;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+      color: #FFFFFF;
+    }
+
+    .quick-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: #FFFFFF;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+      font-family: inherit;
+    }
+    .quick-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+    .quick-btn.active {
+      background: #2563EB;
+      color: #FFFFFF;
+    }
+
+    /* BOTÃO FLUTUANTE CUSTOMIZADOR */
+    .editor-toggle-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #111827;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 30px;
+      padding: 10px 18px;
+      font-size: 12.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+      cursor: pointer;
+      z-index: 999;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .editor-toggle-btn:hover {
+      background: #374151;
+      transform: scale(1.02);
+    }
+
+    /* DRAWER LATERAL DE EDIÇÃO */
+    .editor-drawer {
+      position: fixed;
+      top: 0;
+      right: -480px;
+      width: 460px;
+      height: 100vh;
+      background: #FFFFFF;
+      box-shadow: -4px 0 25px rgba(0,0,0,0.15);
+      z-index: 1000;
+      transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+    }
+    .editor-drawer.open {
+      right: 0;
+    }
+
+    .drawer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #E5E7EB;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #F9FAFB;
+    }
+
+    .drawer-header h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .drawer-close-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #6B7280;
+      cursor: pointer;
+    }
+
+    .drawer-content {
+      padding: 18px 20px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .editor-section {
+      border-bottom: 1px solid #F3F4F6;
+      padding-bottom: 18px;
+    }
+    .editor-section:last-child {
+      border-bottom: none;
+    }
+
+    .editor-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .form-row label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #4B5563;
+    }
+
+    .form-row input, .form-row select {
+      padding: 7px 10px;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-family: inherit;
+    }
+    .form-row input:focus, .form-row select:focus {
+      outline: none;
+      border-color: #3B82F6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .color-picker-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .color-picker-row input[type="color"] {
+      width: 36px;
+      height: 32px;
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid #D1D5DB;
+      cursor: pointer;
+    }
+
+    .preset-pills-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .preset-pill {
+      background: #F3F4F6;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #374151;
+      cursor: pointer;
+    }
+    .preset-pill:hover {
+      background: #E5E7EB;
+    }
+
+    .btn-action-primary {
+      background: #2563EB;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-action-primary:hover {
+      background: #1D4ED8;
+    }
+
+    .btn-action-secondary {
+      background: #F3F4F6;
+      color: #374151;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-danger {
+      background: #FEE2E2;
+      color: #DC2626;
+      border: 1px solid #FCA5A5;
+    }
+
+    /* MODO PRINT LIMPO */
+    body.clean-print-mode .editor-toggle-btn,
+    body.clean-print-mode .quick-actions-bar,
+    body.clean-print-mode .editor-drawer,
+    body.clean-print-mode .clean-mode-floating-notice {
+      display: none !important;
+    }
+
+    body.clean-print-mode [contenteditable="true"] {
+      outline: none !important;
+      background: transparent !important;
+    }
+
+    .clean-mode-floating-notice {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #111827;
+      color: #FFFFFF;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 12px;
+      z-index: 10000;
+      display: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    body.clean-print-mode .clean-mode-floating-notice {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    @media print {
+      body {
+        background: #FFFFFF;
+      }
+      .editor-toggle-btn, .quick-actions-bar, .editor-drawer, .clean-mode-floating-notice {
+        display: none !important;
+      }
+      #dashboard-capture-area {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="clean-mode-floating-notice" id="clean-notice">
+    <span>Modo Visualização Ativo (Pressione <strong>ESC</strong> para sair)</span>
+    <button class="btn-action-secondary" style="padding: 2px 8px; font-size: 10px;" onclick="toggleCleanMode()">Sair</button>
+  </div>
+
+  <div id="dashboard-capture-area">
+
+    <!-- 1. HEADER COM ASSET OFICIAL V3 -->
+    <header class="top-header">
+      <div></div>
+
+      <div class="logo-container" onclick="openDrawer()" title="gobrax">
+        <img class="gobrax-header-img" id="img-logo" src="https://v3.gobrax.com.br/static/media/gobrax-header.7c4014560aefe0f27aab.png" alt="gobrax" onerror="this.outerHTML='<span style=\'font-weight:800;font-size:24px;color:#FFC20E;\'>go<span style=\'color:#1F2937;\'>brax</span></span>'">
+      </div>
+
+      <div class="top-header-right">
+        <div class="company-selector-wrap">
+          <div class="icon-office">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19 2H9c-1.1 0-2 .9-2 2v2H5c-1.1 0-2 .9-2 2v14h18V4c0-1.1-.9-2-2-2zM5 8h2v3H5V8zm0 5h2v3H5v-3zm0 5h2v3H5v-3zm14 3h-2v-3h2v3zm0-5h-2v-3h2v3zm0-5h-2V8h2v3zm0-5h-2V4h2v2zm-6 15h-2v-3h2v3zm0-5h-2v-3h2v3zm0-5h-2V8h2v3zm0-5h-2V4h2v2z"/>
+            </svg>
+          </div>
+          <div class="company-info">
+            <span class="label">Selecione a empresa</span>
+            <button class="company-dropdown-btn">
+              <span id="txt-company-name">EXPRESSO N...</span>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 1L5 5L9 1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="avatar-icon" title="Usuário">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. SUB-HEADER BAR -->
+    <div class="filter-subheader-bar">
+      <div class="page-title" id="txt-page-title">Análise individual de motoristas</div>
+
+      <div class="filter-pills-group">
+        <!-- Motorista -->
+        <div class="pill-select pill-driver" title="Editar motorista">
+          <span id="txt-driver-name">ALEXANDRE SOUZA VIEIRA</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="#6B7280" stroke-width="1.8" stroke-linecap="round"><path d="M1 1L5 5L9 1"/></svg>
+        </div>
+
+        <!-- Período -->
+        <div class="pill-select pill-date" title="Editar período">
+          <span id="txt-date-range">23/08/2026 - 29/08/2026</span>
+        </div>
+
+        <!-- Frota -->
+        <div class="pill-select pill-fleet" title="Editar frota">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="#374151">
+              <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            </svg>
+            <span class="fleet-tag">
+              <span id="txt-fleet-name">Toda minha frota</span>
+              <span style="font-size: 12px; cursor: pointer;">&times;</span>
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #9CA3AF; font-size: 11px;">
+            <span>&times;</span>
+            <svg width="8" height="5" viewBox="0 0 10 6" fill="none" stroke="#6B7280" stroke-width="1.8" stroke-linecap="round"><path d="M1 1L5 5L9 1"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-imprimir" onclick="window.print()" id="btn-imprimir-top">IMPRIMIR</button>
+    </div>
+
+    <!-- 3. MAIN DASHBOARD CONTENT -->
+    <main class="dashboard-body">
+
+      <!-- LINHA 1: DESEMPENHO + INDICADORES -->
+      <section class="dashboard-row">
+
+        <!-- CARD DESEMPENHO -->
+        <div class="dash-card desempenho-card">
+          <div class="card-header">
+            <span class="card-title">Desempenho</span>
+          </div>
+          
+          <div class="gauge-wrapper" onclick="openDrawer()" title="Clique para editar a cor e nota do velocímetro">
+            <svg class="gauge-svg" viewBox="0 0 120 120">
+              <circle class="gauge-bg-circle" cx="60" cy="60" r="48"></circle>
+              <circle class="gauge-value-circle" id="gauge-circle" cx="60" cy="60" r="48"
+                stroke-dasharray="301.59"
+                stroke-dashoffset="0"></circle>
+            </svg>
+            <div class="gauge-center-text" id="txt-desempenho-val">100</div>
+          </div>
+
+          <!-- METADADOS DO VEÍCULO (Lista vertical minimalista com traços idênticos ao original) -->
+          <div class="vehicle-metadata-list" id="vehicle-metadata-box">
+            
+            <!-- 1. Linha Caminhão (VOLVO) -->
+            <div class="vehicle-meta-item">
+              <span class="vehicle-meta-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2C3E50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 3h15v13H1z"></path>
+                  <path d="M16 8h4l3 3v5h-7V8z"></path>
+                  <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                  <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                </svg>
+              </span>
+              <span id="txt-meta-brand">VOLVO</span>
+            </div>
+
+            <!-- 2. Linha Calendário (2022) -->
+            <div class="vehicle-meta-item">
+              <span class="vehicle-meta-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2C3E50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              </span>
+              <span id="txt-meta-year">2022</span>
+            </div>
+
+            <!-- 3. Linha Bomba Combustível (540.0) -->
+            <div class="vehicle-meta-item">
+              <span class="vehicle-meta-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2C3E50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 2h10v19H3z"></path>
+                  <path d="M13 7h3a2 2 0 0 1 2 2v6a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9l-3-3"></path>
+                  <circle cx="8" cy="8" r="2"></circle>
+                </svg>
+              </span>
+              <span id="txt-meta-fuel">540.0</span>
+            </div>
+
+            <!-- 4. Linha Placa / Documento (FH 540) -->
+            <div class="vehicle-meta-item">
+              <span class="vehicle-meta-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2C3E50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                  <line x1="7" y1="8" x2="17" y2="8"></line>
+                  <line x1="7" y1="12" x2="17" y2="12"></line>
+                  <line x1="7" y1="16" x2="12" y2="16"></line>
+                </svg>
+              </span>
+              <span id="txt-meta-model">FH 540</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- CARD INDICADORES -->
+        <div class="dash-card indicadores-card">
+          <div class="card-header">
+            <span class="card-title">Indicadores</span>
+            <div class="indicadores-header-actions">
+              <button class="btn-grafico-toggle">
+                <span>Gráfico</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="indicadores-carousel-wrap">
+            <button class="carousel-arrow-btn left" onclick="scrollIndicadores(-200)">&lsaquo;</button>
+            
+            <div class="indicadores-list" id="indicadores-list-container">
+              <!-- Injetado via JS -->
+            </div>
+
+            <button class="carousel-arrow-btn right" onclick="scrollIndicadores(200)">&rsaquo;</button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- LINHA 2: PRESSÃO DO ACELERADOR + ESTATÍSTICAS -->
+      <section class="dashboard-row">
+
+        <!-- CARD PRESSÃO DO ACELERADOR -->
+        <div class="dash-card pressao-card">
+          <div>
+            <div class="card-header">
+              <span class="card-title">Pressão do acelerador</span>
+              <span class="info-icon-btn" title="Informações">ⓘ</span>
+            </div>
+
+            <div class="bars-chart-container" id="pressao-bars-container">
+              <!-- Barras geradas dinamicamente -->
+            </div>
+          </div>
+
+          <div class="pressao-stars-row" id="pressao-stars-container" onclick="openDrawer()" title="Clique para editar as estrelas">
+            <!-- Estrelas geradas dinamicamente -->
+          </div>
+        </div>
+
+        <!-- CARD ESTATÍSTICAS -->
+        <div class="dash-card estatisticas-card">
+          <div class="card-header">
+            <span class="card-title">Estatísticas</span>
+          </div>
+
+          <div class="estatisticas-grid" id="estatisticas-grid-container">
+            <!-- Estatísticas geradas dinamicamente -->
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- BARRA RÁPIDA INFERIOR -->
+  <div class="quick-actions-bar">
+    <button class="quick-btn" id="btn-toggle-inline-edit" onclick="toggleInlineEditing()">
+      <span>Edição Direta:</span> <strong id="inline-edit-status">OFF</strong>
+    </button>
+    <button class="quick-btn" onclick="takeCleanScreenshot()">
+      <span>Baixar Print (PNG)</span>
+    </button>
+    <button class="quick-btn" onclick="toggleCleanMode()">
+      <span>Modo Foto / Visualização</span>
+    </button>
+    <button class="quick-btn" onclick="openDrawer()">
+      <span>Painel Completo</span>
+    </button>
+  </div>
+
+  <!-- BOTÃO FLUTUANTE DE CUSTOMIZAÇÃO -->
+  <button class="editor-toggle-btn" onclick="openDrawer()" title="Personalizar Cores, Barras e Indicadores">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+    <span>Personalizar</span>
+  </button>
+
+  <!-- DRAWER LATERAL DE EDIÇÃO COMPLETA -->
+  <aside class="editor-drawer" id="editor-drawer">
+    <div class="drawer-header">
+      <h3>Customizador Gobrax</h3>
+      <button class="drawer-close-btn" onclick="closeDrawer()">&times;</button>
+    </div>
+
+    <div class="drawer-content">
+
+      <!-- PRESETS RÁPIDOS -->
+      <div class="editor-section">
+        <div class="editor-section-title">Modelos Prontos (Presets)</div>
+        <div class="preset-pills-row">
+          <button class="preset-pill" onclick="applyPreset('alexandre')">Alexandre (100% Verde)</button>
+          <button class="preset-pill" onclick="applyPreset('jose')">José Marcos (67% Âmbar)</button>
+        </div>
+      </div>
+      
+      <!-- SEÇÃO GERAL -->
+      <div class="editor-section">
+        <div class="editor-section-title">Informações do Cabeçalho</div>
+        
+        <div class="form-row">
+          <label>Nome do Motorista:</label>
+          <input type="text" id="inp-driver" oninput="updateGeneralInfo()">
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Período:</label>
+            <input type="text" id="inp-date" oninput="updateGeneralInfo()">
+          </div>
+          <div class="form-row">
+            <label>Empresa:</label>
+            <input type="text" id="inp-company" oninput="updateGeneralInfo()">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Frota:</label>
+          <input type="text" id="inp-fleet" oninput="updateGeneralInfo()">
+        </div>
+      </div>
+
+      <!-- SEÇÃO DESEMPENHO (GAUGE & CORES) -->
+      <div class="editor-section">
+        <div class="editor-section-title">Desempenho & Cores do Velocímetro</div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Nota / Score (0 a 100):</label>
+            <input type="number" id="inp-desempenho-val" min="0" max="100" oninput="updateDesempenho()">
+          </div>
+          <div class="form-row">
+            <label>Cor do Círculo:</label>
+            <div class="color-picker-row">
+              <input type="color" id="inp-desempenho-color" onchange="updateDesempenho()">
+              <button class="btn-action-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="setGaugeColor('#00D26A')">Verde</button>
+              <button class="btn-action-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="setGaugeColor('#FFAA00')">Âmbar</button>
+              <button class="btn-action-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="setGaugeColor('#E63946')">Vermelho</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px;">
+          <strong style="font-size: 11.5px; color: #374151;">Dados do Veículo (Abaixo do velocímetro)</strong>
+          <div class="form-grid-2" style="margin-top: 6px;">
+            <div class="form-row">
+              <label>Marca:</label>
+              <input type="text" id="inp-meta-brand" oninput="updateVehicleMeta()">
+            </div>
+            <div class="form-row">
+              <label>Ano:</label>
+              <input type="text" id="inp-meta-year" oninput="updateVehicleMeta()">
+            </div>
+            <div class="form-row">
+              <label>Potência/Consumo:</label>
+              <input type="text" id="inp-meta-fuel" oninput="updateVehicleMeta()">
+            </div>
+            <div class="form-row">
+              <label>Modelo:</label>
+              <input type="text" id="inp-meta-model" oninput="updateVehicleMeta()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO PRESSÃO DO ACELERADOR -->
+      <div class="editor-section">
+        <div class="editor-section-title">Pressão do Acelerador & Barras</div>
+        
+        <!-- IDEAL -->
+        <div style="background: #F0FDF4; border: 1px solid #BBF7D0; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+          <strong style="font-size: 12px; color: #15803D;">1. Ideal</strong>
+          <div class="form-grid-2" style="margin-top: 6px;">
+            <div class="form-row">
+              <label>Texto / %:</label>
+              <input type="text" id="inp-pressao-ideal-val" oninput="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Altura Visual (%):</label>
+              <input type="number" min="0" max="100" id="inp-pressao-ideal-height" oninput="updatePressao()">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Cor da Barra:</label>
+              <input type="color" id="inp-pressao-ideal-color" onchange="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Cor de Fundo da Barra:</label>
+              <input type="color" id="inp-pressao-ideal-bg" onchange="updatePressao()">
+            </div>
+          </div>
+        </div>
+
+        <!-- ATENÇÃO -->
+        <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+          <strong style="font-size: 12px; color: #B45309;">2. Atenção</strong>
+          <div class="form-grid-2" style="margin-top: 6px;">
+            <div class="form-row">
+              <label>Texto / %:</label>
+              <input type="text" id="inp-pressao-atencao-val" oninput="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Altura Visual (%):</label>
+              <input type="number" min="0" max="100" id="inp-pressao-atencao-height" oninput="updatePressao()">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Cor da Barra:</label>
+              <input type="color" id="inp-pressao-atencao-color" onchange="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Cor de Fundo da Barra:</label>
+              <input type="color" id="inp-pressao-atencao-bg" onchange="updatePressao()">
+            </div>
+          </div>
+        </div>
+
+        <!-- CRÍTICO -->
+        <div style="background: #FEF2F2; border: 1px solid #FECACA; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+          <strong style="font-size: 12px; color: #B91C1C;">3. Crítico</strong>
+          <div class="form-grid-2" style="margin-top: 6px;">
+            <div class="form-row">
+              <label>Texto / %:</label>
+              <input type="text" id="inp-pressao-critico-val" oninput="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Altura Visual (%):</label>
+              <input type="number" min="0" max="100" id="inp-pressao-critico-height" oninput="updatePressao()">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Cor da Barra:</label>
+              <input type="color" id="inp-pressao-critico-color" onchange="updatePressao()">
+            </div>
+            <div class="form-row">
+              <label>Cor de Fundo da Barra:</label>
+              <input type="color" id="inp-pressao-critico-bg" onchange="updatePressao()">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-grid-2" style="margin-top: 6px;">
+          <div class="form-row">
+            <label>Estrelas (0 a 5):</label>
+            <input type="number" id="inp-pressao-stars" min="0" max="5" oninput="updatePressao()">
+          </div>
+          <div class="form-row">
+            <label>Cor das Estrelas:</label>
+            <input type="color" id="inp-pressao-star-color" onchange="updatePressao()">
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO INDICADORES -->
+      <div class="editor-section">
+        <div class="editor-section-title">
+          <span>Indicadores de Condução</span>
+          <button class="btn-action-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="addNewIndicador()">+ Adicionar</button>
+        </div>
+        <div id="editor-indicadores-form-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Injetado via JS -->
+        </div>
+      </div>
+
+      <!-- SEÇÃO ESTATÍSTICAS -->
+      <div class="editor-section">
+        <div class="editor-section-title">Estatísticas Gerais (8 Cards)</div>
+        <div id="editor-estatisticas-form-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Injetado via JS -->
+        </div>
+      </div>
+
+      <!-- AÇÕES DE PRESET / SALVAR -->
+      <div class="editor-section" style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-action-primary" onclick="saveToLocalStorage()">
+          Salvar Configurações no Navegador
+        </button>
+        <div class="form-grid-2">
+          <button class="btn-action-secondary" onclick="exportJSON()">
+            Baixar JSON
+          </button>
+          <button class="btn-action-secondary" onclick="document.getElementById('file-import-json').click()">
+            Carregar JSON
+          </button>
+          <input type="file" id="file-import-json" style="display: none;" accept=".json" onchange="importJSON(event)">
+        </div>
+        <button class="btn-action-secondary btn-danger" onclick="resetToDefault()">
+          Restaurar Padrão
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- JAVASCRIPT REATIVO -->
+  <script>
+    const PRESETS = {
+      alexandre: {
+        driverName: "ALEXANDRE SOUZA VIEIRA",
+        dateRange: "23/08/2026 - 29/08/2026",
+        companyName: "EXPRESSO N...",
+        fleetName: "Toda minha frota",
+        desempenho: {
+          value: 100,
+          color: "#00D26A"
+        },
+        vehicleMeta: {
+          brand: "VOLVO",
+          year: "2022",
+          fuel: "540.0",
+          model: "FH 540"
+        },
+        indicadores: [
+          { id: "ind_1", label: "Início faixa verde", value: "94%", time: "06:19:51", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_2", label: "Aproveitamento de embalo", value: "31%", time: "02:04:34", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_3", label: "Total motor ligado parado", value: "1%", time: "00:02:37", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_4", label: "Acelerando acima do verde", value: "0%", time: "00:00:00", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_5", label: "Excesso de velocidade", value: "0%", time: "00:00:00", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_6", label: "Piloto automático", value: "0%", time: "00:00:00", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_7", label: "Total faixa verde", value: "96%", time: "06:25:51", color: "#0088FE", stars: 0, starColor: "#0088FE" },
+          { id: "ind_8", label: "Final faixa verde", value: "1%", time: "00:06:00", color: "#0088FE", stars: 0, starColor: "#0088FE" }
+        ],
+        pressao: {
+          ideal: { label: "Ideal", value: "96.73%", height: 96.73, trackBg: "#D1FAE5", fillColor: "#00C853" },
+          atencao: { label: "Atenção", value: "2.91%", height: 16, trackBg: "#FEF3C7", fillColor: "#FFAA00" },
+          critico: { label: "Crítico", value: "0.36%", height: 12, trackBg: "#FEE2E2", fillColor: "#E63946" },
+          stars: 5,
+          starColor: "#FFAA00"
+        },
+        estatisticas: [
+          { id: "stat_1", label: "Km total", value: "361.4 km", icon: "route" },
+          { id: "stat_2", label: "Velocidade média", value: "56.47 km/h", icon: "truck" },
+          { id: "stat_3", label: "Consumo total", value: "207.23 L", icon: "gas" },
+          { id: "stat_4", label: "Média do computador de bordo", value: "1.74 Km/L", icon: "chart" },
+          { id: "stat_5", label: "Odômetro", value: "603125.44 Km", icon: "parking" },
+          { id: "stat_6", label: "Freadas em alta veloc.", value: "8", icon: "brake" },
+          { id: "stat_7", label: "Freadas totais", value: "32", icon: "brake" },
+          { id: "stat_8", label: "Freadas a cada 100 km", value: "8.9", icon: "brake" }
+        ]
+      },
+      jose: {
+        driverName: "JOSE MARCOS DA SILVA FERNANDES",
+        dateRange: "18/08/2026 - 31/08/2026",
+        companyName: "EXPRESSO N...",
+        fleetName: "Toda minha frota",
+        desempenho: {
+          value: 67,
+          color: "#FFAA00"
+        },
+        vehicleMeta: {
+          brand: "VOLVO",
+          year: "2022",
+          fuel: "540.0",
+          model: "FH 540"
+        },
+        indicadores: [
+          { id: "ind_1", label: "Início faixa verde", value: "82%", time: "60:02:24", color: "#FFAA00", stars: 5, starColor: "#FFAA00" },
+          { id: "ind_2", label: "Aproveitamento de embalo", value: "30%", time: "22:20:10", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_3", label: "Total motor ligado parado", value: "2%", time: "01:14:30", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_4", label: "Acelerando acima do verde", value: "1%", time: "00:57:32", color: "#FFAA00", stars: 2, starColor: "#FFAA00" },
+          { id: "ind_5", label: "Excesso de velocidade", value: "0%", time: "00:00:30", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_6", label: "Piloto automático", value: "0%", time: "00:00:00", color: "#00C853", stars: 5, starColor: "#00C853" },
+          { id: "ind_7", label: "Total faixa verde", value: "99%", time: "72:21:58", color: "#0088FE", stars: 0, starColor: "#0088FE" },
+          { id: "ind_8", label: "Final faixa verde", value: "17%", time: "12:23:06", color: "#0088FE", stars: 0, starColor: "#0088FE" }
+        ],
+        pressao: {
+          ideal: { label: "Ideal", value: "62.04%", height: 62.04, trackBg: "#D1FAE5", fillColor: "#00C853" },
+          atencao: { label: "Atenção", value: "5.07%", height: 18, trackBg: "#FEF3C7", fillColor: "#FFAA00" },
+          critico: { label: "Crítico", value: "32.9%", height: 32.9, trackBg: "#FEE2E2", fillColor: "#E63946" },
+          stars: 2,
+          starColor: "#FFAA00"
+        },
+        estatisticas: [
+          { id: "stat_1", label: "Km total", value: "3643.86 km", icon: "route" },
+          { id: "stat_2", label: "Velocidade média", value: "41.11 km/h", icon: "truck" },
+          { id: "stat_3", label: "Consumo total", value: "1974.88 L", icon: "gas" },
+          { id: "stat_4", label: "Média do computador de bordo", value: "1.85 Km/L", icon: "chart" },
+          { id: "stat_5", label: "Odômetro ⓘ", value: "-", icon: "parking" },
+          { id: "stat_6", label: "Freadas em alta veloc.", value: "0", icon: "brake" },
+          { id: "stat_7", label: "Freadas totais", value: "297", icon: "brake" },
+          { id: "stat_8", label: "Freadas a cada 100 km", value: "8.1", icon: "brake" }
+        ]
+      }
+    };
+
+    let state = JSON.parse(JSON.stringify(PRESETS.alexandre));
+
+    const savedState = localStorage.getItem("gobrax_dashboard_v2_state");
+    if (savedState) {
+      try { state = JSON.parse(savedState); } catch(e) {}
+    }
+
+    const ICONS_SVG = {
+      route: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
+      truck: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>`,
+      gas: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 0 0 2.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 0 0 5 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg>`,
+      chart: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>`,
+      parking: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-3V8h3c1.66 0 3 1.34 3 3s-1.34 3-3 3zm0-4h-1v-2h1c.55 0 1 .45 1 1s-.45 1-1 1z"/></svg>`,
+      brake: `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><path d="M5 7a9 9 0 0 0 0 10M19 7a9 9 0 0 1 0 10"/></svg>`
+    };
+
+    function renderDashboard() {
+      // 1. Header & Filtros
+      document.getElementById("txt-driver-name").textContent = state.driverName;
+      document.getElementById("txt-date-range").textContent = state.dateRange;
+      document.getElementById("txt-company-name").textContent = state.companyName;
+      document.getElementById("txt-fleet-name").textContent = state.fleetName;
+
+      // 2. Desempenho
+      const desVal = parseInt(state.desempenho.value) || 0;
+      document.getElementById("txt-desempenho-val").textContent = desVal;
+      
+      const circle = document.getElementById("gauge-circle");
+      const radius = 48;
+      const circumference = 2 * Math.PI * radius; // ~301.59
+      circle.style.strokeDasharray = `${circumference} ${circumference}`;
+      const offset = circumference - (desVal / 100) * circumference;
+      circle.style.strokeDashoffset = offset;
+      circle.style.stroke = state.desempenho.color || "#00D26A";
+
+      // Metadados Veículo
+      if (state.vehicleMeta) {
+        document.getElementById("txt-meta-brand").textContent = state.vehicleMeta.brand || "VOLVO";
+        document.getElementById("txt-meta-year").textContent = state.vehicleMeta.year || "2022";
+        document.getElementById("txt-meta-fuel").textContent = state.vehicleMeta.fuel || "540.0";
+        document.getElementById("txt-meta-model").textContent = state.vehicleMeta.model || "FH 540";
+      }
+
+      // 3. Indicadores
+      const indContainer = document.getElementById("indicadores-list-container");
+      indContainer.innerHTML = "";
+
+      state.indicadores.forEach((ind) => {
+        const item = document.createElement("div");
+        item.className = "indicador-item";
+        item.onclick = () => openDrawer();
+
+        let starsHtml = "";
+        if (ind.stars && ind.stars > 0) {
+          for (let i = 1; i <= 5; i++) {
+            if (i <= ind.stars) {
+              starsHtml += `<span style="color: ${ind.starColor || ind.color};">★</span>`;
+            } else {
+              starsHtml += `<span style="color: #E2E8F0;">★</span>`;
+            }
+          }
+        }
+
+        item.innerHTML = `
+          <div class="indicador-val" style="color: ${ind.color};">${ind.value}</div>
+          <div class="indicador-time">${ind.time}</div>
+          <div class="indicador-stars">${starsHtml}</div>
+          <div class="indicador-label">${ind.label}</div>
+        `;
+        indContainer.appendChild(item);
+      });
+
+      // 4. Pressão do Acelerador
+      const pressaoContainer = document.getElementById("pressao-bars-container");
+      const p = state.pressao;
+      
+      pressaoContainer.innerHTML = `
+        <!-- Ideal -->
+        <div class="bar-column">
+          <div class="bar-track" style="background-color: ${p.ideal.trackBg};" onclick="openDrawer()">
+            <div class="bar-fill" style="height: ${p.ideal.height}%; background-color: ${p.ideal.fillColor};">
+              <span class="bar-percentage-tag">${p.ideal.value}</span>
+            </div>
+          </div>
+          <div class="bar-legend">
+            <span class="legend-dot" style="background-color: ${p.ideal.fillColor};"></span>
+            <span>${p.ideal.label}</span>
+          </div>
+        </div>
+
+        <!-- Atenção -->
+        <div class="bar-column">
+          <div class="bar-track" style="background-color: ${p.atencao.trackBg};" onclick="openDrawer()">
+            <div class="bar-fill" style="height: ${p.atencao.height}%; background-color: ${p.atencao.fillColor};">
+              <span class="bar-percentage-tag">${p.atencao.value}</span>
+            </div>
+          </div>
+          <div class="bar-legend">
+            <span class="legend-dot" style="background-color: ${p.atencao.fillColor};"></span>
+            <span>${p.atencao.label}</span>
+          </div>
+        </div>
+
+        <!-- Crítico -->
+        <div class="bar-column">
+          <div class="bar-track" style="background-color: ${p.critico.trackBg};" onclick="openDrawer()">
+            <div class="bar-fill" style="height: ${p.critico.height}%; background-color: ${p.critico.fillColor};">
+              <span class="bar-percentage-tag">${p.critico.value}</span>
+            </div>
+          </div>
+          <div class="bar-legend">
+            <span class="legend-dot" style="background-color: ${p.critico.fillColor};"></span>
+            <span>${p.critico.label}</span>
+          </div>
+        </div>
+      `;
+
+      // Estrelas Pressão
+      const pressaoStarsContainer = document.getElementById("pressao-stars-container");
+      let pStarsHtml = "";
+      for (let i = 1; i <= 5; i++) {
+        if (i <= (p.stars || 0)) {
+          pStarsHtml += `<span style="color: ${p.starColor || '#FFAA00'};">★</span>`;
+        } else {
+          pStarsHtml += `<span style="color: #CBD5E1;">★</span>`;
+        }
+      }
+      pressaoStarsContainer.innerHTML = pStarsHtml;
+
+      // 5. Estatísticas
+      const statsGrid = document.getElementById("estatisticas-grid-container");
+      statsGrid.innerHTML = "";
+
+      state.estatisticas.forEach((stat) => {
+        const card = document.createElement("div");
+        card.className = "stat-card";
+        card.onclick = () => openDrawer();
+
+        const iconSvg = ICONS_SVG[stat.icon] || ICONS_SVG.route;
+
+        card.innerHTML = `
+          <div class="stat-card-top">
+            <div class="stat-icon">${iconSvg}</div>
+            <div class="stat-label">${stat.label}</div>
+          </div>
+          <div class="stat-val">${stat.value}</div>
+        `;
+        statsGrid.appendChild(card);
+      });
+
+      syncDrawerInputs();
+    }
+
+    function syncDrawerInputs() {
+      document.getElementById("inp-driver").value = state.driverName;
+      document.getElementById("inp-date").value = state.dateRange;
+      document.getElementById("inp-company").value = state.companyName;
+      document.getElementById("inp-fleet").value = state.fleetName;
+
+      document.getElementById("inp-desempenho-val").value = state.desempenho.value;
+      document.getElementById("inp-desempenho-color").value = state.desempenho.color;
+
+      if (state.vehicleMeta) {
+        document.getElementById("inp-meta-brand").value = state.vehicleMeta.brand || "";
+        document.getElementById("inp-meta-year").value = state.vehicleMeta.year || "";
+        document.getElementById("inp-meta-fuel").value = state.vehicleMeta.fuel || "";
+        document.getElementById("inp-meta-model").value = state.vehicleMeta.model || "";
+      }
+
+      document.getElementById("inp-pressao-ideal-val").value = state.pressao.ideal.value;
+      document.getElementById("inp-pressao-ideal-height").value = state.pressao.ideal.height;
+      document.getElementById("inp-pressao-ideal-color").value = state.pressao.ideal.fillColor;
+      document.getElementById("inp-pressao-ideal-bg").value = rgbToHex(state.pressao.ideal.trackBg);
+
+      document.getElementById("inp-pressao-atencao-val").value = state.pressao.atencao.value;
+      document.getElementById("inp-pressao-atencao-height").value = state.pressao.atencao.height;
+      document.getElementById("inp-pressao-atencao-color").value = state.pressao.atencao.fillColor;
+      document.getElementById("inp-pressao-atencao-bg").value = rgbToHex(state.pressao.atencao.trackBg);
+
+      document.getElementById("inp-pressao-critico-val").value = state.pressao.critico.value;
+      document.getElementById("inp-pressao-critico-height").value = state.pressao.critico.height;
+      document.getElementById("inp-pressao-critico-color").value = state.pressao.critico.fillColor;
+      document.getElementById("inp-pressao-critico-bg").value = rgbToHex(state.pressao.critico.trackBg);
+
+      document.getElementById("inp-pressao-stars").value = state.pressao.stars;
+      document.getElementById("inp-pressao-star-color").value = state.pressao.starColor || "#FFAA00";
+
+      // Formulário Indicadores
+      const indFormList = document.getElementById("editor-indicadores-form-list");
+      indFormList.innerHTML = "";
+
+      state.indicadores.forEach((ind, index) => {
+        const itemBox = document.createElement("div");
+        itemBox.style.cssText = "background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px;";
+        
+        itemBox.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong style="font-size: 12px; color: #1F2937;">#${index+1} ${ind.label}</strong>
+            <button class="btn-action-secondary btn-danger" style="padding: 2px 6px; font-size: 10px;" onclick="removeIndicador(${index})">Remover</button>
+          </div>
+          <div class="form-row">
+            <label>Título:</label>
+            <input type="text" value="${ind.label}" oninput="state.indicadores[${index}].label = this.value; renderDashboard();">
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Porcentagem:</label>
+              <input type="text" value="${ind.value}" oninput="state.indicadores[${index}].value = this.value; renderDashboard();">
+            </div>
+            <div class="form-row">
+              <label>Tempo (hh:mm:ss):</label>
+              <input type="text" value="${ind.time}" oninput="state.indicadores[${index}].time = this.value; renderDashboard();">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Cor do Valor:</label>
+              <input type="color" value="${ind.color}" onchange="state.indicadores[${index}].color = this.value; state.indicadores[${index}].starColor = this.value; renderDashboard();">
+            </div>
+            <div class="form-row">
+              <label>Estrelas (0 a 5):</label>
+              <input type="number" min="0" max="5" value="${ind.stars}" oninput="state.indicadores[${index}].stars = parseInt(this.value)||0; renderDashboard();">
+            </div>
+          </div>
+        `;
+        indFormList.appendChild(itemBox);
+      });
+
+      // Formulário Estatísticas
+      const statFormList = document.getElementById("editor-estatisticas-form-list");
+      statFormList.innerHTML = "";
+
+      state.estatisticas.forEach((st, idx) => {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; gap: 8px; align-items: center;";
+        row.innerHTML = `
+          <input type="text" style="flex: 1.2; font-size: 11px; padding: 5px;" value="${st.label}" oninput="state.estatisticas[${idx}].label = this.value; renderDashboard();">
+          <input type="text" style="flex: 1; font-size: 11px; padding: 5px;" value="${st.value}" oninput="state.estatisticas[${idx}].value = this.value; renderDashboard();">
+        `;
+        statFormList.appendChild(row);
+      });
+    }
+
+    function rgbToHex(color) {
+      if (!color || color.startsWith("#")) return color || "#FFFFFF";
+      return "#FFFFFF";
+    }
+
+    function updateGeneralInfo() {
+      state.driverName = document.getElementById("inp-driver").value;
+      state.dateRange = document.getElementById("inp-date").value;
+      state.companyName = document.getElementById("inp-company").value;
+      state.fleetName = document.getElementById("inp-fleet").value;
+      renderDashboard();
+    }
+
+    function updateDesempenho() {
+      state.desempenho.value = parseInt(document.getElementById("inp-desempenho-val").value) || 0;
+      state.desempenho.color = document.getElementById("inp-desempenho-color").value;
+      renderDashboard();
+    }
+
+    function setGaugeColor(hex) {
+      document.getElementById("inp-desempenho-color").value = hex;
+      state.desempenho.color = hex;
+      renderDashboard();
+    }
+
+    function updateVehicleMeta() {
+      if (!state.vehicleMeta) state.vehicleMeta = {};
+      state.vehicleMeta.brand = document.getElementById("inp-meta-brand").value;
+      state.vehicleMeta.year = document.getElementById("inp-meta-year").value;
+      state.vehicleMeta.fuel = document.getElementById("inp-meta-fuel").value;
+      state.vehicleMeta.model = document.getElementById("inp-meta-model").value;
+      renderDashboard();
+    }
+
+    function updatePressao() {
+      state.pressao.ideal.value = document.getElementById("inp-pressao-ideal-val").value;
+      state.pressao.ideal.height = parseFloat(document.getElementById("inp-pressao-ideal-height").value) || 50;
+      state.pressao.ideal.fillColor = document.getElementById("inp-pressao-ideal-color").value;
+      state.pressao.ideal.trackBg = document.getElementById("inp-pressao-ideal-bg").value;
+
+      state.pressao.atencao.value = document.getElementById("inp-pressao-atencao-val").value;
+      state.pressao.atencao.height = parseFloat(document.getElementById("inp-pressao-atencao-height").value) || 15;
+      state.pressao.atencao.fillColor = document.getElementById("inp-pressao-atencao-color").value;
+      state.pressao.atencao.trackBg = document.getElementById("inp-pressao-atencao-bg").value;
+
+      state.pressao.critico.value = document.getElementById("inp-pressao-critico-val").value;
+      state.pressao.critico.height = parseFloat(document.getElementById("inp-pressao-critico-height").value) || 10;
+      state.pressao.critico.fillColor = document.getElementById("inp-pressao-critico-color").value;
+      state.pressao.critico.trackBg = document.getElementById("inp-pressao-critico-bg").value;
+
+      state.pressao.stars = parseInt(document.getElementById("inp-pressao-stars").value) || 0;
+      state.pressao.starColor = document.getElementById("inp-pressao-star-color").value;
+      renderDashboard();
+    }
+
+    function applyPreset(name) {
+      if (PRESETS[name]) {
+        state = JSON.parse(JSON.stringify(PRESETS[name]));
+        renderDashboard();
+      }
+    }
+
+    function addNewIndicador() {
+      state.indicadores.push({
+        id: "ind_" + Date.now(),
+        label: "Novo Indicador",
+        value: "50%",
+        time: "05:00:00",
+        color: "#00C853",
+        stars: 5,
+        starColor: "#00C853"
+      });
+      renderDashboard();
+    }
+
+    function removeIndicador(index) {
+      state.indicadores.splice(index, 1);
+      renderDashboard();
+    }
+
+    function scrollIndicadores(amount) {
+      document.getElementById("indicadores-list-container").scrollBy({
+        left: amount,
+        behavior: "smooth"
+      });
+    }
+
+    // Edição Direta
+    let isInlineEditing = false;
+    function toggleInlineEditing() {
+      isInlineEditing = !isInlineEditing;
+      const statusEl = document.getElementById("inline-edit-status");
+      const btn = document.getElementById("btn-toggle-inline-edit");
+
+      if (isInlineEditing) {
+        statusEl.textContent = "ON";
+        btn.classList.add("active");
+        enableContentEditable(true);
+      } else {
+        statusEl.textContent = "OFF";
+        btn.classList.remove("active");
+        enableContentEditable(false);
+      }
+    }
+
+    function enableContentEditable(enabled) {
+      const editables = document.querySelectorAll("#txt-driver-name, #txt-date-range, #txt-company-name, #txt-fleet-name, #txt-desempenho-val, #txt-meta-brand, #txt-meta-year, #txt-meta-fuel, #txt-meta-model, .indicador-val, .indicador-time, .indicador-label, .bar-percentage-tag, .stat-val, .stat-label, #txt-page-title");
+      
+      editables.forEach(el => {
+        el.contentEditable = enabled ? "true" : "false";
+        if (enabled) {
+          el.onblur = function() {
+            if (this.id === "txt-driver-name") state.driverName = this.textContent.trim();
+            if (this.id === "txt-date-range") state.dateRange = this.textContent.trim();
+            if (this.id === "txt-company-name") state.companyName = this.textContent.trim();
+            if (this.id === "txt-fleet-name") state.fleetName = this.textContent.trim();
+            if (this.id === "txt-desempenho-val") {
+              state.desempenho.value = parseInt(this.textContent.trim()) || 0;
+              updateDesempenho();
+            }
+          };
+        }
+      });
+    }
+
+    function toggleCleanMode() {
+      document.body.classList.toggle("clean-print-mode");
+      if (document.body.classList.contains("clean-print-mode")) closeDrawer();
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        document.body.classList.remove("clean-print-mode");
+        closeDrawer();
+      }
+    });
+
+    function takeCleanScreenshot() {
+      const wasInline = isInlineEditing;
+      if (wasInline) enableContentEditable(false);
+
+      document.body.classList.add("clean-print-mode");
+      const element = document.getElementById("dashboard-capture-area");
+
+      setTimeout(() => {
+        html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#F5F6F8",
+          logging: false
+        }).then(canvas => {
+          document.body.classList.remove("clean-print-mode");
+          if (wasInline) enableContentEditable(true);
+
+          const link = document.createElement("a");
+          const driverClean = state.driverName.replace(/\s+/g, '_').toLowerCase();
+          link.download = `gobrax_${driverClean}.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        }).catch(err => {
+          document.body.classList.remove("clean-print-mode");
+          if (wasInline) enableContentEditable(true);
+          window.print();
+        });
+      }, 150);
+    }
+
+    function openDrawer() { document.getElementById("editor-drawer").classList.add("open"); }
+    function closeDrawer() { document.getElementById("editor-drawer").classList.remove("open"); }
+
+    function saveToLocalStorage() {
+      localStorage.setItem("gobrax_dashboard_v2_state", JSON.stringify(state));
+      alert("Configurações salvas no seu navegador!");
+    }
+
+    function resetToDefault() {
+      if (confirm("Deseja restaurar para o modelo padrão?")) {
+        state = JSON.parse(JSON.stringify(PRESETS.alexandre));
+        localStorage.removeItem("gobrax_dashboard_v2_state");
+        renderDashboard();
+      }
+    }
+
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "gobrax_config.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          state = JSON.parse(e.target.result);
+          renderDashboard();
+          alert("Configuração importada com sucesso!");
+        } catch(err) {
+          alert("Arquivo JSON inválido!");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      renderDashboard();
+    });
+  </script>
+
+</body>
+</html>

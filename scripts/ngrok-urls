@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Lista as URLs públicas atuais dos túneis do ngrok (API local :4040).
+# O túnel 'homehub' usa o domínio fixo reservado (⭐) — nunca muda.
+# Os demais ('command-panel', 'terminal') mudam a cada restart do container.
+set -euo pipefail
+
+json="$(curl -fsS --max-time 4 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
+  || docker exec homeserver-ngrok sh -c 'wget -qO- http://127.0.0.1:4040/api/tunnels' 2>/dev/null \
+  || true)"
+
+if [ -z "$json" ]; then
+  echo "❌ API do ngrok (:4040) indisponível. O container homeserver-ngrok está rodando?" >&2
+  exit 1
+fi
+
+python3 - "$json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+for t in data.get("tunnels", []):
+    name = t.get("name", "?")
+    url = t.get("public_url", "")
+    star = "  ⭐ domínio fixo" if ".ngrok-free.dev" in url else ""
+    print(f"{name:15s} {url}{star}")
+PY
